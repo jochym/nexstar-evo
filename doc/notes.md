@@ -5,8 +5,8 @@ with the Evolution telescope.
 
 ## WiFi operation
 
-In standard mode the WiFi module in the scope creates its own network
-unprotected (!) with very stupid selection of IP range. The scope IP is 1.2.3.4
+In standard mode the WiFi module in the scope creates its own network:
+unprotected, with very wired selection of IP range. The scope IP is 1.2.3.4
 and the dhcp server in the scope handles out addresses in the /24 network
 starting from 1.2.3.10, with default gateway and dns set to scope (!). This is
 really *bad design*. The address range is a regular *internet* address (belongs
