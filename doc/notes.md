@@ -138,10 +138,10 @@ In the following sequence:
 :   Sends one byte (0x47) from ALT and AZM in reply to cmd 0x47
     Seems to be problematic - the messages are:
 
-3b 03 20 10 47 86
-3b 04 10 20 f0 47 95
-3b 03 20 11 47 85
-3b 04 11 20 f0 47 94
+    3b 03 20 10 47 86
+    3b 04 10 20 f0 47 95
+    3b 03 20 11 47 85
+    3b 04 11 20 f0 47 94
 
 One would think this should be 0x47f0 not 0xf047 ?
 Maybe it is just a bug in the firmware and it is a autoguide rate 
