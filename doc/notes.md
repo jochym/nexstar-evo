@@ -106,40 +106,24 @@ The targets list is extended by some new IDs:
 |   0x23    |           |     N/A       |    8bit       |           |
 |   0xf0    |           |     N/A       |    8bit       |           |
 
-0x05
-:   Gets some angle data from the AZM MC. 
-    No transmission from the ALT MC spotted.
-
-0x20
-:   Sends 16 bits to ALT and AZM. Only AZM acknowledges.
-
-0x21
-:   Asks AZM. Gets 32 bits back. Always the same so far (0x0f901194).
-    Used at the start of the session.
-
-0x22
-:   Sends one byte (0x01) to ALT and AZM.
-
-0x23
-:   Asks AZM. Gets back one byte (0x01 so far)
-    0x21 and 0x23 are used together at the start of the session.
-    Both against AZM MC.
-
-0xf0
-:   Sends one byte (0x47) from ALT and AZM in reply to cmd 0x47
-    Seems to be problematic - the messages are:
-
+* 0x05 - Gets some angle data from the AZM MC. No transmission from the ALT MC spotted.
+* 0x20 - Sends 16 bits to ALT and AZM. Only AZM acknowledges.
+* 0x21 - Asks AZM. Gets 32 bits back. Always the same so far (0x0f901194). Used at the start of the session.
+* 0x22 - Sends one byte (0x01) to ALT and AZM.
+* 0x23 - Asks AZM. Gets back one byte (0x01 so far). 
+  0x21 and 0x23 are used together at the start of the session. Both against AZM MC.
+* 0xf0 - Sends one byte (0x47) from ALT and AZM in reply to cmd 0x47.
+  Seems to be problematic - the messages are:
     3b 03 20 10 47 86
     3b 04 10 20 f0 47 95
     3b 03 20 11 47 85
     3b 04 11 20 f0 47 94
-
-One would think this should be 0x47f0 not 0xf047 ?
-Maybe it is just a bug in the firmware and it is a autoguide rate 
-of 93.75% of sideral rate (someone flipped the bytes)?
-From further experiments it looks like a bug in the firmware.
-At least in the AltAz mode. It is also possible that due to the fact
-that this mount does not have autoguide port the firmware breaks
-if you try to program it.
+  One would think this should be 0x47f0 not 0xf047 ?
+  Maybe it is just a bug in the firmware and it is a autoguide rate 
+  of 93.75% of sideral rate (someone flipped the bytes)?
+  From further experiments it looks like a bug in the firmware.
+  At least in the AltAz mode. It is also possible that due to the fact
+  that this mount does not have autoguide port the firmware breaks
+  if you try to program it.
 
 
