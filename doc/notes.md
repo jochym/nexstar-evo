@@ -75,24 +75,24 @@ The targets list is extended by some new IDs:
 
 * 0x0d - The NexStar+ controller
 * 0xb5 - WiFly WiFi controller. 
-    - Responds to  0x10 - get status. Probably to enable/disable commands as well (cannot test these!).
+ - Responds to  0x10 - get status. Probably to enable/disable commands as well (cannot test these!).
 * 0xb6 - Battery/Power controller
-  - Responds to 0x10 with battery status bytes:
-    * charging (0x00/0x01)
-    * status (0x00/0x01/0x02 LOW/MEDIUM/HIGH)
-    * voltage (32bit integer in network order representing voltage in microvolts)
-  - Responds to 0x18 command (set/get external power limit) wich is a 16bit int representin current limit in mA.
+ - Responds to 0x10 with battery status bytes:
+  * charging (0x00/0x01)
+  * status (0x00/0x01/0x02 LOW/MEDIUM/HIGH)
+  * voltage (32bit integer in network order representing voltage in microvolts)
+ - Responds to 0x18 command (set/get external power limit) wich is a 16bit int representin current limit in mA.
 * 0xb7 - Charge port. 
-  - Responds to 0x10 - Get status/Set status
-    * 0x00 automatic 
-    * 0x01 allways on
+ - Responds to 0x10 - Get status/Set status
+  * 0x00 automatic 
+  * 0x01 allways on
 * 0xbf - Mount Lights controller
-  - Responds to 0x10 : Get/Set status  + selector byte with two bytes:
-    * Selector:
-       - 0x00 Tray
-       - 0x01 WiFi
-       - 0x02 Logo
-    * Value: 0x00-0xff = 0-100%
+ - Responds to 0x10 : Get/Set status  + selector byte with two bytes:
+  * Selector:
+   - 0x00 Tray
+   - 0x01 WiFi
+   - 0x02 Logo
+  * Value: 0x00-0xff = 0-100%
 * 0x20 - Network device (skyPortal app)
 
 ## Additional commands
