@@ -373,82 +373,82 @@ bool NexStarEvo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
     return true;
 }
 
-    bool NexStarEvo::ReadScopeStatus()
-    {
-        struct ln_hrz_posn AltAz;
-        AltAz.alt = double(CurrentEncoderMicrostepsDEC) / MICROSTEPS_PER_DEGREE;
-        AltAz.az = double(CurrentEncoderMicrostepsRA) / MICROSTEPS_PER_DEGREE;
-        TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(AltAz);
+bool NexStarEvo::ReadScopeStatus()
+{
+    struct ln_hrz_posn AltAz;
+    AltAz.alt = double(CurrentEncoderMicrostepsDEC) / MICROSTEPS_PER_DEGREE;
+    AltAz.az = double(CurrentEncoderMicrostepsRA) / MICROSTEPS_PER_DEGREE;
+    TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(AltAz);
 
-        double RightAscension, Declination;
-        if (!TransformTelescopeToCelestial( TDV, RightAscension, Declination))
+    double RightAscension, Declination;
+    if (!TransformTelescopeToCelestial( TDV, RightAscension, Declination))
+    {
+        if (TraceThisTick)
+            DEBUG(DBG_NSEVO, "ReadScopeStatus - TransformTelescopeToCelestial failed");
+
+        bool HavePosition = false;
+        ln_lnlat_posn Position;
+        if ((NULL != IUFindNumber(&LocationNP, "LAT")) && ( 0 != IUFindNumber(&LocationNP, "LAT")->value)
+            && (NULL != IUFindNumber(&LocationNP, "LONG")) && ( 0 != IUFindNumber(&LocationNP, "LONG")->value))
+        {
+            // I assume that being on the equator and exactly on the prime meridian is unlikely
+            Position.lat = IUFindNumber(&LocationNP, "LAT")->value;
+            Position.lng = IUFindNumber(&LocationNP, "LONG")->value;
+            HavePosition = true;
+        }
+        struct ln_equ_posn EquatorialCoordinates;
+        if (HavePosition)
         {
             if (TraceThisTick)
-                DEBUG(DBG_NSEVO, "ReadScopeStatus - TransformTelescopeToCelestial failed");
-
-            bool HavePosition = false;
-            ln_lnlat_posn Position;
-            if ((NULL != IUFindNumber(&LocationNP, "LAT")) && ( 0 != IUFindNumber(&LocationNP, "LAT")->value)
-                && (NULL != IUFindNumber(&LocationNP, "LONG")) && ( 0 != IUFindNumber(&LocationNP, "LONG")->value))
+                DEBUG(DBG_NSEVO, "ReadScopeStatus - HavePosition true");
+            TelescopeDirectionVector RotatedTDV(TDV);
+            switch (GetApproximateMountAlignment())
             {
-                // I assume that being on the equator and exactly on the prime meridian is unlikely
-                Position.lat = IUFindNumber(&LocationNP, "LAT")->value;
-                Position.lng = IUFindNumber(&LocationNP, "LONG")->value;
-                HavePosition = true;
-            }
-            struct ln_equ_posn EquatorialCoordinates;
-            if (HavePosition)
-            {
-                if (TraceThisTick)
-                    DEBUG(DBG_NSEVO, "ReadScopeStatus - HavePosition true");
-                TelescopeDirectionVector RotatedTDV(TDV);
-                switch (GetApproximateMountAlignment())
-                {
-                    case ZENITH:
-                        if (TraceThisTick)
-                            DEBUG(DBG_NSEVO, "ReadScopeStatus - ApproximateMountAlignment ZENITH");
-                        break;
+                case ZENITH:
+                    if (TraceThisTick)
+                        DEBUG(DBG_NSEVO, "ReadScopeStatus - ApproximateMountAlignment ZENITH");
+                    break;
 
-                    case NORTH_CELESTIAL_POLE:
-                        if (TraceThisTick)
-                            DEBUG(DBG_NSEVO, "ReadScopeStatus - ApproximateMountAlignment NORTH_CELESTIAL_POLE");
-                        // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 minus
-                        // the (positive)observatory latitude. The vector itself is rotated clockwise
-                        RotatedTDV.RotateAroundY(90.0 - Position.lat);
-                        AltitudeAzimuthFromTelescopeDirectionVector(RotatedTDV, AltAz);
-                        break;
+                case NORTH_CELESTIAL_POLE:
+                    if (TraceThisTick)
+                        DEBUG(DBG_NSEVO, "ReadScopeStatus - ApproximateMountAlignment NORTH_CELESTIAL_POLE");
+                    // Rotate the TDV coordinate system anticlockwise (positive) around the y axis by 90 minus
+                    // the (positive)observatory latitude. The vector itself is rotated clockwise
+                    RotatedTDV.RotateAroundY(90.0 - Position.lat);
+                    AltitudeAzimuthFromTelescopeDirectionVector(RotatedTDV, AltAz);
+                    break;
 
-                    case SOUTH_CELESTIAL_POLE:
-                        if (TraceThisTick)
-                            DEBUG(DBG_NSEVO, "ReadScopeStatus - ApproximateMountAlignment SOUTH_CELESTIAL_POLE");
-                        // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 plus
-                        // the (negative)observatory latitude. The vector itself is rotated anticlockwise
-                        RotatedTDV.RotateAroundY(-90.0 - Position.lat);
-                        AltitudeAzimuthFromTelescopeDirectionVector(RotatedTDV, AltAz);
-                        break;
-                }
-                ln_get_equ_from_hrz(&AltAz, &Position, ln_get_julian_from_sys(), &EquatorialCoordinates);
+                case SOUTH_CELESTIAL_POLE:
+                    if (TraceThisTick)
+                        DEBUG(DBG_NSEVO, "ReadScopeStatus - ApproximateMountAlignment SOUTH_CELESTIAL_POLE");
+                    // Rotate the TDV coordinate system clockwise (negative) around the y axis by 90 plus
+                    // the (negative)observatory latitude. The vector itself is rotated anticlockwise
+                    RotatedTDV.RotateAroundY(-90.0 - Position.lat);
+                    AltitudeAzimuthFromTelescopeDirectionVector(RotatedTDV, AltAz);
+                    break;
             }
-            else
-            {
-                if (TraceThisTick)
-                    DEBUG(DBG_NSEVO, "ReadScopeStatus - HavePosition false");
-
-                // The best I can do is just do a direct conversion to RA/DEC
-                EquatorialCoordinatesFromTelescopeDirectionVector(TDV, EquatorialCoordinates);
-            }
-            // libnova works in decimal degrees
-            RightAscension = EquatorialCoordinates.ra * 24.0 / 360.0;
-            Declination = EquatorialCoordinates.dec;
+            ln_get_equ_from_hrz(&AltAz, &Position, ln_get_julian_from_sys(), &EquatorialCoordinates);
         }
+        else
+        {
+            if (TraceThisTick)
+                DEBUG(DBG_NSEVO, "ReadScopeStatus - HavePosition false");
 
-        if (TraceThisTick)
-            DEBUGF(DBG_NSEVO, "ReadScopeStatus - RA %lf hours DEC %lf degrees", RightAscension, Declination);
-
-        NewRaDec(RightAscension, Declination);
-
-        return true;
+            // The best I can do is just do a direct conversion to RA/DEC
+            EquatorialCoordinatesFromTelescopeDirectionVector(TDV, EquatorialCoordinates);
+        }
+        // libnova works in decimal degrees
+        RightAscension = EquatorialCoordinates.ra * 24.0 / 360.0;
+        Declination = EquatorialCoordinates.dec;
     }
+
+    if (TraceThisTick)
+        DEBUGF(DBG_NSEVO, "ReadScopeStatus - RA %lf hours DEC %lf degrees", RightAscension, Declination);
+
+    NewRaDec(RightAscension, Declination);
+
+    return true;
+}
 
 bool NexStarEvo::Sync(double ra, double dec)
     {
