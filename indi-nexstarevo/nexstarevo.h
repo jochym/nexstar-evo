@@ -4,7 +4,7 @@
 #include "libindi/indiguiderinterface.h"
 #include "libindi/inditelescope.h"
 #include "libindi/alignment/AlignmentSubsystemForDrivers.h"
-
+#include "NexStarAUXScope.h"
 
 
 class NexStarEvo : public INDI::Telescope, public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
@@ -28,6 +28,7 @@ protected:
     virtual bool ISNewSwitch (const char *dev, const char *name, ISState *states, char *names[], int n);
     friend void ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n);
     virtual bool ISNewText (const char *dev, const char *name, char *texts[], char *names[], int n);
+    // TODO: Switch to AltAz from N-S/W-E
     virtual bool MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command);
     virtual bool MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command);
     virtual bool ReadScopeStatus();
@@ -36,28 +37,31 @@ protected:
     virtual bool updateLocation(double latitude, double longitude, double elevation);
 
 private:
-    static const long MICROSTEPS_PER_REVOLUTION;
-    static const double MICROSTEPS_PER_DEGREE;
+    static const long STEPS_PER_REVOLUTION;
+    static const double STEPS_PER_DEGREE;
     static const double DEFAULT_SLEW_RATE;
-    static const long MAX_DEC;
-    static const long MIN_DEC;
+    static const long MAX_ALT;
+    static const long MIN_ALT;
+
+    NexStarAUXScope scope;
 
     enum AxisStatus { STOPPED, SLEWING, SLEWING_TO };
     enum AxisDirection { FORWARD, REVERSE };
 
-    AxisStatus AxisStatusDEC;
-    AxisDirection AxisDirectionDEC;
-    double AxisSlewRateDEC;
-    long CurrentEncoderMicrostepsDEC;
-    long GotoTargetMicrostepsDEC;
+    AxisStatus AxisStatusALT;
+    AxisDirection AxisDirectionALT;
+    double AxisSlewRateALT;
+    long CurrentALT;
+    long GotoTargetALT;
 
-    AxisStatus AxisStatusRA;
-    AxisDirection AxisDirectionRA;
-    double AxisSlewRateRA;
-    long CurrentEncoderMicrostepsRA;
-    long GotoTargetMicrostepsRA;
+    AxisStatus AxisStatusAZ;
+    AxisDirection AxisDirectionAZ;
+    double AxisSlewRateAZ;
+    long CurrentAZ;
+    long GotoTargetAZ;
 
     // Previous motion direction
+    // TODO: Switch to AltAz from N-S/W-E
     typedef enum { PREVIOUS_NS_MOTION_NORTH = DIRECTION_NORTH,
                     PREVIOUS_NS_MOTION_SOUTH = DIRECTION_SOUTH,
                     PREVIOUS_NS_MOTION_UNKNOWN = -1} PreviousNSMotion_t;

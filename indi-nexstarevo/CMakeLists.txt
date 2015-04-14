@@ -21,7 +21,7 @@ include_directories( ${INDI_INCLUDE_DIR})
 include_directories( ${NOVA_INCLUDE_DIR})
 include_directories( ${NOVA_INCLUDE_DIR}/..)
 
-add_executable(indi-nexstarevo nexstarevo.cpp)
+add_executable(indi-nexstarevo nexstarevo.cpp NexStarAUXScope.cpp)
 target_link_libraries(indi-nexstarevo indiAlignmentDriver 
 ${INDI_LIBRARIES} ${INDI_DRIVER_LIBRARIES} ${NOVA_LIBRARIES})
 

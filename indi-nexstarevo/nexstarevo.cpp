@@ -9,6 +9,8 @@
 #include "nexstarevo.h"
 #include "indicom.h"
 
+#include "NexStarAUXScope.h"
+
 #include <memory>
 
 using namespace INDI::AlignmentSubsystem;
@@ -65,17 +67,19 @@ void ISSnoopDevice (XMLEle *root)
 }
 
 // One definition rule (ODR) constants
-const long NexStarEvo::MICROSTEPS_PER_REVOLUTION = 16777216;
-const double NexStarEvo::MICROSTEPS_PER_DEGREE = MICROSTEPS_PER_REVOLUTION / 360.0;
-const double NexStarEvo::DEFAULT_SLEW_RATE = MICROSTEPS_PER_DEGREE * 2.0;
-const long NexStarEvo::MAX_DEC = 90.0 * MICROSTEPS_PER_DEGREE;
-const long NexStarEvo::MIN_DEC = -90.0 * MICROSTEPS_PER_DEGREE;
+// AUX commands use 24bit integer as a representation of angle in units of 
+// fractional revolutions. Thus 2^24 steps makes full revolution.
+const long NexStarEvo::STEPS_PER_REVOLUTION = 16777216; 
+const double NexStarEvo::STEPS_PER_DEGREE = STEPS_PER_REVOLUTION / 360.0;
+const double NexStarEvo::DEFAULT_SLEW_RATE = STEPS_PER_DEGREE * 2.0;
+const long NexStarEvo::MAX_ALT = 90.0 * STEPS_PER_DEGREE;
+const long NexStarEvo::MIN_ALT = -90.0 * STEPS_PER_DEGREE;
 
 NexStarEvo::NexStarEvo() : 
-    AxisStatusRA(STOPPED), AxisDirectionRA(FORWARD),
-    AxisSlewRateRA(DEFAULT_SLEW_RATE), CurrentEncoderMicrostepsRA(0),
-    AxisStatusDEC(STOPPED), AxisDirectionDEC(FORWARD),
-    AxisSlewRateDEC(DEFAULT_SLEW_RATE), CurrentEncoderMicrostepsDEC(0),
+    AxisStatusAZ(STOPPED), AxisDirectionAZ(FORWARD),
+    AxisSlewRateAZ(DEFAULT_SLEW_RATE), CurrentAZ(0),
+    AxisStatusALT(STOPPED), AxisDirectionALT(FORWARD),
+    AxisSlewRateALT(DEFAULT_SLEW_RATE), CurrentALT(0),
     PreviousNSMotion(PREVIOUS_NS_MOTION_UNKNOWN),
     PreviousWEMotion(PREVIOUS_WE_MOTION_UNKNOWN),
     TraceThisTickCount(0),
@@ -87,7 +91,7 @@ NexStarEvo::NexStarEvo() :
     cap.canPark = false;
     cap.canSync = true;
     cap.canAbort = true;
-    cap.nSlewRate=4;
+    cap.nSlewRate=6;
     SetTelescopeCapability(&cap);
 }
 
@@ -118,7 +122,7 @@ bool NexStarEvo::Abort()
 
     TrackState = SCOPE_IDLE;
 
-    AxisStatusRA = AxisStatusDEC = STOPPED; // This marvelous inertia free scope can be stopped instantly!
+    AxisStatusAZ = AxisStatusALT = STOPPED; // This marvelous inertia free scope can be stopped instantly!
 
     AbortSP.s      = IPS_OK;
     IUResetSwitch(&AbortSP);
@@ -246,28 +250,7 @@ bool NexStarEvo::Goto(double ra,double dec)
 
     DEBUGF(DBG_NSEVO, "Goto - Scope reference frame target altitude %lf azimuth %lf", AltAz.alt, AltAz.az);
 
-    GotoTargetMicrostepsDEC = int(AltAz.alt * MICROSTEPS_PER_DEGREE);
-    if (GotoTargetMicrostepsDEC == CurrentEncoderMicrostepsDEC)
-        AxisStatusDEC = STOPPED;
-    else
-    {
-        if (GotoTargetMicrostepsDEC > CurrentEncoderMicrostepsDEC)
-            AxisDirectionDEC = FORWARD;
-        else
-            AxisDirectionDEC = REVERSE;
-        AxisStatusDEC = SLEWING_TO;
-    }
-    GotoTargetMicrostepsRA = int(AltAz.az * MICROSTEPS_PER_DEGREE);
-    if (GotoTargetMicrostepsRA == CurrentEncoderMicrostepsRA)
-        AxisStatusRA = STOPPED;
-    else
-    {
-        if (GotoTargetMicrostepsRA > CurrentEncoderMicrostepsRA)
-            AxisDirectionRA = (GotoTargetMicrostepsRA - CurrentEncoderMicrostepsRA) < MICROSTEPS_PER_REVOLUTION / 2.0 ? FORWARD : REVERSE;
-        else
-            AxisDirectionRA = (CurrentEncoderMicrostepsRA - GotoTargetMicrostepsRA) < MICROSTEPS_PER_REVOLUTION / 2.0 ? REVERSE : FORWARD;
-        AxisStatusRA = SLEWING_TO;
-    }
+    scope.GoTo(int(AltAz.alt * STEPS_PER_DEGREE),int(AltAz.az * STEPS_PER_DEGREE),ISS_ON == IUFindSwitch(&CoordSP,"TRACK")->s);
 
     TrackState = SCOPE_SLEWING;
 
@@ -350,34 +333,19 @@ bool NexStarEvo::ISNewText (const char *dev, const char *name, char *texts[], ch
 
 bool NexStarEvo::MoveNS(INDI_DIR_NS dir, TelescopeMotionCommand command)
 {
-    AxisDirection axisDir  = (dir == DIRECTION_NORTH) ? FORWARD : REVERSE;
-    AxisStatus    axisStat = (command == MOTION_START) ? SLEWING : STOPPED;
-
-    AxisSlewRateDEC = DEFAULT_SLEW_RATE;
-    AxisDirectionDEC = axisDir;
-    AxisStatusDEC = axisStat;
-
     return true;
 }
 
 bool NexStarEvo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 {
-
-    AxisDirection axisDir  = (dir == DIRECTION_WEST) ? FORWARD : REVERSE;
-    AxisStatus    axisStat = (command == MOTION_START) ? SLEWING : STOPPED;
-
-    AxisSlewRateRA = DEFAULT_SLEW_RATE;
-    AxisDirectionRA = axisDir;
-    AxisStatusRA = axisStat;
-
     return true;
 }
 
 bool NexStarEvo::ReadScopeStatus()
 {
     struct ln_hrz_posn AltAz;
-    AltAz.alt = double(CurrentEncoderMicrostepsDEC) / MICROSTEPS_PER_DEGREE;
-    AltAz.az = double(CurrentEncoderMicrostepsRA) / MICROSTEPS_PER_DEGREE;
+    AltAz.alt = double(scope.GetALT()) / STEPS_PER_DEGREE;
+    AltAz.az = double(scope.GetAZ()) / STEPS_PER_DEGREE;
     TelescopeDirectionVector TDV = TelescopeDirectionVectorFromAltitudeAzimuth(AltAz);
 
     double RightAscension, Declination;
@@ -453,8 +421,8 @@ bool NexStarEvo::ReadScopeStatus()
 bool NexStarEvo::Sync(double ra, double dec)
     {
         struct ln_hrz_posn AltAz;
-        AltAz.alt = double(CurrentEncoderMicrostepsDEC) / MICROSTEPS_PER_DEGREE;
-        AltAz.az = double(CurrentEncoderMicrostepsRA) / MICROSTEPS_PER_DEGREE;
+        AltAz.alt = double(scope.GetALT()) / STEPS_PER_DEGREE;
+        AltAz.az = double(scope.GetAZ()) / STEPS_PER_DEGREE;
 
         AlignmentDatabaseEntry NewEntry;
         NewEntry.ObservationJulianDate = ln_get_julian_from_sys();
@@ -506,182 +474,7 @@ void NexStarEvo::TimerHit()
     dt = tv.tv_sec - ltv.tv_sec + (tv.tv_usec - ltv.tv_usec)/1e6;
     ltv = tv;
 
-
-    // RA axis
-    long SlewSteps = dt * AxisSlewRateRA;
-    bool CompleteRevolution = SlewSteps >= MICROSTEPS_PER_REVOLUTION;
-    SlewSteps = SlewSteps % MICROSTEPS_PER_REVOLUTION; // Just in case ;-)
-
-
-    switch(AxisStatusRA)
-    {
-        case STOPPED:
-            // Do nothing
-            break;
-
-        case SLEWING:
-        {
-            DEBUGF(DBG_NSEVO, "TimerHit Slewing - RA Current Encoder %ld SlewSteps %ld Direction %d Target %ld Status %d",
-                        CurrentEncoderMicrostepsRA, SlewSteps, AxisDirectionRA, GotoTargetMicrostepsRA, AxisStatusRA);
-
-            // Update the encoder
-            if (FORWARD == AxisDirectionRA)
-                CurrentEncoderMicrostepsRA += SlewSteps;
-            else
-                CurrentEncoderMicrostepsRA -= SlewSteps;
-            if (CurrentEncoderMicrostepsRA < 0)
-                CurrentEncoderMicrostepsRA += MICROSTEPS_PER_REVOLUTION;
-            else if (CurrentEncoderMicrostepsRA >= MICROSTEPS_PER_REVOLUTION)
-                CurrentEncoderMicrostepsRA -= MICROSTEPS_PER_REVOLUTION;
-
-            DEBUGF(DBG_NSEVO, "TimerHit Slewing - RA New Encoder %d New Status %d",  CurrentEncoderMicrostepsRA, AxisStatusRA);
-            break;
-        }
-
-        case SLEWING_TO:
-        {
-            DEBUGF(DBG_NSEVO, "TimerHit SlewingTo - RA Current Encoder %ld SlewSteps %ld Direction %d Target %ld Status %d",
-                        CurrentEncoderMicrostepsRA, SlewSteps, AxisDirectionRA, GotoTargetMicrostepsRA, AxisStatusRA);
-
-            long OldEncoder = CurrentEncoderMicrostepsRA;
-            // Update the encoder
-            if (FORWARD == AxisDirectionRA)
-                CurrentEncoderMicrostepsRA += SlewSteps;
-            else
-                CurrentEncoderMicrostepsRA -= SlewSteps;
-            if (CurrentEncoderMicrostepsRA < 0)
-                CurrentEncoderMicrostepsRA += MICROSTEPS_PER_REVOLUTION;
-            else if (CurrentEncoderMicrostepsRA >= MICROSTEPS_PER_REVOLUTION)
-                CurrentEncoderMicrostepsRA -= MICROSTEPS_PER_REVOLUTION;
-
-            if (CompleteRevolution)
-            {
-                // Must have found the target
-                AxisStatusRA = STOPPED;
-                CurrentEncoderMicrostepsRA = GotoTargetMicrostepsRA;
-            }
-            else
-            {
-                bool FoundTarget = false;
-                if (FORWARD == AxisDirectionRA)
-                {
-                    if (CurrentEncoderMicrostepsRA < OldEncoder)
-                    {
-                        // Two ranges to search
-                        if ((GotoTargetMicrostepsRA >= OldEncoder) && (GotoTargetMicrostepsRA <= MICROSTEPS_PER_REVOLUTION))
-                            FoundTarget = true;
-                        else if ((GotoTargetMicrostepsRA >= 0) && (GotoTargetMicrostepsRA <= CurrentEncoderMicrostepsRA))
-                            FoundTarget = true;
-                    }
-                    else if ((GotoTargetMicrostepsRA >= OldEncoder) && (GotoTargetMicrostepsRA <= CurrentEncoderMicrostepsRA))
-                        FoundTarget = true;
-                }
-                else
-                {
-                    if (CurrentEncoderMicrostepsRA > OldEncoder)
-                    {
-                        // Two ranges to search
-                        if ((GotoTargetMicrostepsRA >= 0) && (GotoTargetMicrostepsRA <= OldEncoder))
-                            FoundTarget = true;
-                        else if ((GotoTargetMicrostepsRA >= CurrentEncoderMicrostepsRA) && (GotoTargetMicrostepsRA <= MICROSTEPS_PER_REVOLUTION))
-                            FoundTarget = true;
-                    }
-                    else if ((GotoTargetMicrostepsRA >= CurrentEncoderMicrostepsRA) && (GotoTargetMicrostepsRA <= OldEncoder))
-                        FoundTarget = true;
-                }
-                if (FoundTarget)
-                {
-                    AxisStatusRA = STOPPED;
-                    CurrentEncoderMicrostepsRA = GotoTargetMicrostepsRA;
-                }
-            }
-            DEBUGF(DBG_NSEVO, "TimerHit SlewingTo - RA New Encoder %d New Status %d",  CurrentEncoderMicrostepsRA, AxisStatusRA);
-            break;
-        }
-    }
-
-
-    // DEC axis
-    SlewSteps = dt * AxisSlewRateDEC;
-
-    switch(AxisStatusDEC)
-    {
-        case STOPPED:
-            // Do nothing
-            break;
-
-        case SLEWING:
-        {
-            DEBUGF(DBG_NSEVO, "TimerHit Slewing - DEC Current Encoder %ld SlewSteps %d Direction %ld Target %ld Status %d",
-                        CurrentEncoderMicrostepsDEC, SlewSteps, AxisDirectionDEC, GotoTargetMicrostepsDEC, AxisStatusDEC);
-
-            // Update the encoder
-            SlewSteps = SlewSteps % MICROSTEPS_PER_REVOLUTION; // Just in case ;-)
-            if (FORWARD == AxisDirectionDEC)
-                CurrentEncoderMicrostepsDEC += SlewSteps;
-            else
-                CurrentEncoderMicrostepsDEC -= SlewSteps;
-            if (CurrentEncoderMicrostepsDEC > MAX_DEC)
-            {
-                CurrentEncoderMicrostepsDEC = MAX_DEC;
-                AxisStatusDEC = STOPPED; // Hit the buffers
-                DEBUG(DBG_NSEVO, "TimerHit - DEC axis hit the buffers at MAX_DEC");
-            }
-            else if(CurrentEncoderMicrostepsDEC < MIN_DEC)
-            {
-                CurrentEncoderMicrostepsDEC = MIN_DEC;
-                AxisStatusDEC = STOPPED; // Hit the buffers
-                DEBUG(DBG_NSEVO, "TimerHit - DEC axis hit the buffers at MIN_DEC");
-            }
-
-            DEBUGF(DBG_NSEVO, "TimerHit Slewing - DEC New Encoder %d New Status %d",  CurrentEncoderMicrostepsDEC, AxisStatusDEC);
-            break;
-        }
-
-        case SLEWING_TO:
-        {
-            DEBUGF(DBG_NSEVO, "TimerHit SlewingTo - DEC Current Encoder %ld SlewSteps %d Direction %ld Target %ld Status %d",
-                        CurrentEncoderMicrostepsDEC, SlewSteps, AxisDirectionDEC, GotoTargetMicrostepsDEC, AxisStatusDEC);
-
-            // Calculate steps to target
-            int StepsToTarget;
-            if (FORWARD == AxisDirectionDEC)
-            {
-                if (CurrentEncoderMicrostepsDEC <= GotoTargetMicrostepsDEC)
-                    StepsToTarget = GotoTargetMicrostepsDEC - CurrentEncoderMicrostepsDEC;
-                else
-                    StepsToTarget = CurrentEncoderMicrostepsDEC - GotoTargetMicrostepsDEC;
-            }
-            else
-            {
-                // Axis in reverse
-                if (CurrentEncoderMicrostepsDEC >= GotoTargetMicrostepsDEC)
-                    StepsToTarget = CurrentEncoderMicrostepsDEC - GotoTargetMicrostepsDEC;
-                else
-                    StepsToTarget = GotoTargetMicrostepsDEC - CurrentEncoderMicrostepsDEC;
-            }
-            if (StepsToTarget <= SlewSteps)
-            {
-                // Target was hit this tick
-                AxisStatusDEC = STOPPED;
-                CurrentEncoderMicrostepsDEC = GotoTargetMicrostepsDEC;
-            }
-            else
-            {
-                if (FORWARD == AxisDirectionDEC)
-                    CurrentEncoderMicrostepsDEC += SlewSteps;
-                else
-                    CurrentEncoderMicrostepsDEC -= SlewSteps;
-                if (CurrentEncoderMicrostepsDEC < 0)
-                    CurrentEncoderMicrostepsDEC += MICROSTEPS_PER_REVOLUTION;
-                else if (CurrentEncoderMicrostepsDEC >= MICROSTEPS_PER_REVOLUTION)
-                    CurrentEncoderMicrostepsDEC -= MICROSTEPS_PER_REVOLUTION;
-            }
-
-            DEBUGF(DBG_NSEVO, "TimerHit SlewingTo - DEC New Encoder %d New Status %d",  CurrentEncoderMicrostepsDEC, AxisStatusDEC);
-            break;
-        }
-    }
+    scope.TimerTick(dt);
 
     INDI::Telescope::TimerHit(); // This will call ReadScopeStatus
 
@@ -690,7 +483,7 @@ void NexStarEvo::TimerHit()
     switch(TrackState)
     {
         case SCOPE_SLEWING:
-            if ((STOPPED == AxisStatusRA) && (STOPPED == AxisStatusDEC))
+            if ((STOPPED == AxisStatusAZ) && (STOPPED == AxisStatusALT))
             {
                 if (ISS_ON == IUFindSwitch(&CoordSP,"TRACK")->s)
                 {
@@ -769,77 +562,15 @@ void NexStarEvo::TimerHit()
                 AltAz.az = 360.0 + AltAz.az;
             }
 
-            long AltitudeOffsetMicrosteps = int(AltAz.alt * MICROSTEPS_PER_DEGREE - CurrentEncoderMicrostepsDEC);
-            long AzimuthOffsetMicrosteps = int(AltAz.az * MICROSTEPS_PER_DEGREE - CurrentEncoderMicrostepsRA);
-
-            DEBUGF(DBG_NSEVO, "TimerHit - Tracking AltitudeOffsetMicrosteps %d AzimuthOffsetMicrosteps %d",
-                    AltitudeOffsetMicrosteps, AzimuthOffsetMicrosteps);
-
-            if (0 != AzimuthOffsetMicrosteps)
             {
-                // Calculate the slewing rates needed to reach that position
-                // at the correct time. This is simple as interval is one second
-                if (AzimuthOffsetMicrosteps > 0)
-                {
-                    if (AzimuthOffsetMicrosteps < MICROSTEPS_PER_REVOLUTION / 2.0)
-                    {
-                        // Forward
-                        AxisDirectionRA = FORWARD;
-                        AxisSlewRateRA = AzimuthOffsetMicrosteps;
-                    }
-                    else
-                    {
-                        // Reverse
-                        AxisDirectionRA = REVERSE;
-                        AxisSlewRateRA = MICROSTEPS_PER_REVOLUTION - AzimuthOffsetMicrosteps;
-                    }
-                }
-                else
-                {
-                    AzimuthOffsetMicrosteps = abs(AzimuthOffsetMicrosteps);
-                    if (AzimuthOffsetMicrosteps < MICROSTEPS_PER_REVOLUTION / 2.0)
-                    {
-                        // Forward
-                        AxisDirectionRA = REVERSE;
-                        AxisSlewRateRA = AzimuthOffsetMicrosteps;
-                    }
-                    else
-                    {
-                        // Reverse
-                        AxisDirectionRA = FORWARD;
-                        AxisSlewRateRA = MICROSTEPS_PER_REVOLUTION - AzimuthOffsetMicrosteps;
-                    }
-                }
-                AxisSlewRateRA = abs(AzimuthOffsetMicrosteps);
-                AxisDirectionRA = AzimuthOffsetMicrosteps > 0 ? FORWARD : REVERSE;  // !!!! BEWARE INERTIA FREE MOUNT
-                AxisStatusRA = SLEWING;
-                DEBUGF(DBG_NSEVO, "TimerHit - Tracking AxisSlewRateRA %lf AxisDirectionRA %d",
-                    AxisSlewRateRA, AxisDirectionRA);
-            }
-            else
-            {
-                // Nothing to do - stop the axis
-                AxisStatusRA = STOPPED; // !!!! BEWARE INERTIA FREE MOUNT
-                DEBUG(DBG_NSEVO, "TimerHit - Tracking nothing to do stopping RA axis");
-            }
+                long altRate, azRate;
+                altRate=int(AltAz.alt * STEPS_PER_DEGREE - scope.GetALT());
+                azRate=int(AltAz.az * STEPS_PER_DEGREE - scope.GetAZ());
+                scope.Track(altRate,azRate);
 
-            if (0 != AltitudeOffsetMicrosteps)
-            {
-                 // Calculate the slewing rates needed to reach that position
-                // at the correct time.
-                AxisSlewRateDEC = abs(AltitudeOffsetMicrosteps);
-                AxisDirectionDEC = AltitudeOffsetMicrosteps > 0 ? FORWARD : REVERSE;  // !!!! BEWARE INERTIA FREE MOUNT
-                AxisStatusDEC = SLEWING;
-                DEBUGF(DBG_NSEVO, "TimerHit - Tracking AxisSlewRateDEC %lf AxisDirectionDEC %d",
-                    AxisSlewRateDEC, AxisDirectionDEC);
+                DEBUGF(DBG_NSEVO, "TimerHit - Tracking AltitudeOffsetMicrosteps %d AzimuthOffsetMicrosteps %d",
+                        altRate, azRate);
             }
-            else
-            {
-                // Nothing to do - stop the axis
-                AxisStatusDEC = STOPPED;  // !!!! BEWARE INERTIA FREE MOUNT
-                DEBUG(DBG_NSEVO, "TimerHit - Tracking nothing to do stopping DEC axis");
-            }
-
             break;
         }
 
