@@ -41,7 +41,7 @@ void ISNewSwitch(const char *dev, const char *name, ISState *states, char *names
         telescope_nse->ISNewSwitch(dev, name, states, names, num);
 }
 
-void ISNewText(	const char *dev, const char *name, char *texts[], char *names[], int num)
+void ISNewText(const char *dev, const char *name, char *texts[], char *names[], int num)
 {
         ISInit();
         telescope_nse->ISNewText(dev, name, texts, names, num);
@@ -65,11 +65,32 @@ void ISSnoopDevice (XMLEle *root)
 }
 
 // One definition rule (ODR) constants
-const long NexStarEvo::MICROSTEPS_PER_REVOLUTION = 1000000;
+const long NexStarEvo::MICROSTEPS_PER_REVOLUTION = 16777216;
 const double NexStarEvo::MICROSTEPS_PER_DEGREE = MICROSTEPS_PER_REVOLUTION / 360.0;
 const double NexStarEvo::DEFAULT_SLEW_RATE = MICROSTEPS_PER_DEGREE * 2.0;
 const long NexStarEvo::MAX_DEC = 90.0 * MICROSTEPS_PER_DEGREE;
 const long NexStarEvo::MIN_DEC = -90.0 * MICROSTEPS_PER_DEGREE;
+
+NexStarEvo::NexStarEvo() : 
+    AxisStatusRA(STOPPED), AxisDirectionRA(FORWARD),
+    AxisSlewRateRA(DEFAULT_SLEW_RATE), CurrentEncoderMicrostepsRA(0),
+    AxisStatusDEC(STOPPED), AxisDirectionDEC(FORWARD),
+    AxisSlewRateDEC(DEFAULT_SLEW_RATE), CurrentEncoderMicrostepsDEC(0),
+    PreviousNSMotion(PREVIOUS_NS_MOTION_UNKNOWN),
+    PreviousWEMotion(PREVIOUS_WE_MOTION_UNKNOWN),
+    TraceThisTickCount(0),
+    TraceThisTick(false),
+    DBG_NSEVO(INDI::Logger::getInstance().addDebugLevel("NexStar Evo Verbose", "NSEVO")) 
+{
+    TelescopeCapability cap;
+
+    cap.canPark = false;
+    cap.canSync = true;
+    cap.canAbort = true;
+    cap.nSlewRate=4;
+    SetTelescopeCapability(&cap);
+}
+
 
 // Private methods
 
@@ -429,7 +450,7 @@ bool NexStarEvo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         return true;
     }
 
-    bool NexStarEvo::Sync(double ra, double dec)
+bool NexStarEvo::Sync(double ra, double dec)
     {
         struct ln_hrz_posn AltAz;
         AltAz.alt = double(CurrentEncoderMicrostepsDEC) / MICROSTEPS_PER_DEGREE;
@@ -442,6 +463,8 @@ bool NexStarEvo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
         NewEntry.TelescopeDirection = TelescopeDirectionVectorFromAltitudeAzimuth(AltAz);
         NewEntry.PrivateDataSize = 0;
 
+        DEBUGF(DBG_NSEVO, "Sync - Celestial reference frame target right ascension %lf(%lf) declination %lf", ra * 360.0 / 24.0, ra, dec);
+
         if (!CheckForDuplicateSyncPoint(NewEntry))
         {
 
@@ -452,9 +475,11 @@ bool NexStarEvo::MoveWE(INDI_DIR_WE dir, TelescopeMotionCommand command)
 
             // Tell the math plugin to reinitialise
             Initialise(this);
+            DEBUGF(DBG_NSEVO, "Sync - new entry added RA: %lf(%lf) DEC: %lf", ra * 360.0 / 24.0, ra, dec);
 
             return true;
         }
+        DEBUGF(DBG_NSEVO, "Sync - adding entry failed RA: %lf(%lf) DEC: %lf", ra * 360.0 / 24.0, ra, dec);
         return false;
     }
 

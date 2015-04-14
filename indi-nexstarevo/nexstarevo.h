@@ -10,18 +10,9 @@
 class NexStarEvo : public INDI::Telescope, public INDI::AlignmentSubsystem::AlignmentSubsystemForDrivers
 {
 public:
-    NexStarEvo() : AxisStatusRA(STOPPED), AxisDirectionRA(FORWARD),
-                AxisSlewRateRA(DEFAULT_SLEW_RATE), CurrentEncoderMicrostepsRA(0),
-                AxisStatusDEC(STOPPED), AxisDirectionDEC(FORWARD),
-                AxisSlewRateDEC(DEFAULT_SLEW_RATE), CurrentEncoderMicrostepsDEC(0),
-                PreviousNSMotion(PREVIOUS_NS_MOTION_UNKNOWN),
-                PreviousWEMotion(PREVIOUS_WE_MOTION_UNKNOWN),
-                TraceThisTickCount(0),
-                TraceThisTick(false),
-                DBG_NSEVO(INDI::Logger::getInstance().addDebugLevel("NexStar Evo Verbose", "NSEVO")) {}
+    NexStarEvo();
 
-
-private:
+protected:
     virtual bool Abort();
     bool canSync();
     virtual bool Connect();
@@ -44,6 +35,7 @@ private:
     virtual void TimerHit();
     virtual bool updateLocation(double latitude, double longitude, double elevation);
 
+private:
     static const long MICROSTEPS_PER_REVOLUTION;
     static const double MICROSTEPS_PER_DEGREE;
     static const double DEFAULT_SLEW_RATE;
