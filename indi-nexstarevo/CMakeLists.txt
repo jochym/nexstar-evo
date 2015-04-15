@@ -9,6 +9,7 @@ set(CMAKE_CXX_FLAGS "-std=c++0x ${CMAKE_CXX_FLAGS}")
 find_package(INDI REQUIRED)
 find_package(Nova REQUIRED)
 find_package(ZLIB REQUIRED)
+find_library(LIBEV_LIBRARY NAMES ev)
 
 set(NSEVO_VERSION_MAJOR 0)
 set(NSEVO_VERSION_MINOR 1)
@@ -22,7 +23,7 @@ include_directories( ${NOVA_INCLUDE_DIR})
 include_directories( ${NOVA_INCLUDE_DIR}/..)
 
 add_executable(indi-nexstarevo nexstarevo.cpp NexStarAUXScope.cpp)
-target_link_libraries(indi-nexstarevo indiAlignmentDriver 
+target_link_libraries(indi-nexstarevo indiAlignmentDriver ev
 ${INDI_LIBRARIES} ${INDI_DRIVER_LIBRARIES} ${NOVA_LIBRARIES})
 
 
