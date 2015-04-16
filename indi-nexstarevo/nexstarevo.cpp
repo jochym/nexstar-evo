@@ -74,6 +74,7 @@ const double NexStarEvo::STEPS_PER_DEGREE = STEPS_PER_REVOLUTION / 360.0;
 const double NexStarEvo::DEFAULT_SLEW_RATE = STEPS_PER_DEGREE * 2.0;
 const long NexStarEvo::MAX_ALT = 90.0 * STEPS_PER_DEGREE;
 const long NexStarEvo::MIN_ALT = -90.0 * STEPS_PER_DEGREE;
+const double NexStarEvo::TRACK_SCALE = 80.0/60;
 
 NexStarEvo::NexStarEvo() : 
     AxisStatusAZ(STOPPED), AxisDirectionAZ(FORWARD),
@@ -250,9 +251,8 @@ bool NexStarEvo::Goto(double ra,double dec)
 
     DEBUGF(DBG_NSEVO, "Goto - Scope reference frame target altitude %lf azimuth %lf", AltAz.alt, AltAz.az);
 
-    scope.GoTo(int(AltAz.alt * STEPS_PER_DEGREE),int(AltAz.az * STEPS_PER_DEGREE),ISS_ON == IUFindSwitch(&CoordSP,"TRACK")->s);
-
     TrackState = SCOPE_SLEWING;
+    scope.GoTo(int(AltAz.alt * STEPS_PER_DEGREE),int(AltAz.az * STEPS_PER_DEGREE),ISS_ON == IUFindSwitch(&CoordSP,"TRACK")->s);
 
     EqNP.s    = IPS_BUSY;
 
@@ -483,7 +483,7 @@ void NexStarEvo::TimerHit()
     switch(TrackState)
     {
         case SCOPE_SLEWING:
-            if ((STOPPED == AxisStatusAZ) && (STOPPED == AxisStatusALT))
+            if (not scope.slewing())
             {
                 if (ISS_ON == IUFindSwitch(&CoordSP,"TRACK")->s)
                 {
@@ -506,9 +506,9 @@ void NexStarEvo::TimerHit()
             // Continue or start tracking
             // Calculate where the mount needs to be in POLLMS time
             // POLLMS is hardcoded to be one second
-            double JulianOffset = 1.0 / (24.0 * 60 * 60); // TODO may need to make this longer to get a meaningful result
+            double JulianOffset = 60.0 / (24.0 * 60 * 60); // TODO may need to make this longer to get a meaningful result
             TelescopeDirectionVector TDV;
-            ln_hrz_posn AltAz;
+            ln_hrz_posn AltAz, AAzero;
             if (TransformCelestialToTelescope(CurrentTrackingTarget.ra, CurrentTrackingTarget.dec,
                                                 JulianOffset, TDV))
                 AltitudeAzimuthFromTelescopeDirectionVector(TDV, AltAz);
@@ -529,9 +529,12 @@ void NexStarEvo::TimerHit()
                 // libnova works in decimal degrees
                 EquatorialCoordinates.ra = CurrentTrackingTarget.ra * 360.0 / 24.0;
                 EquatorialCoordinates.dec = CurrentTrackingTarget.dec;
-                if (HavePosition)
+                if (HavePosition) {
                     ln_get_hrz_from_equ(&EquatorialCoordinates, &Position,
                                             ln_get_julian_from_sys() + JulianOffset, &AltAz);
+                    ln_get_hrz_from_equ(&EquatorialCoordinates, &Position,
+                                            ln_get_julian_from_sys(), &AAzero);
+                }
                 else
                 {
                     // No sense in tracking in this case
@@ -564,12 +567,19 @@ void NexStarEvo::TimerHit()
 
             {
                 long altRate, azRate;
-                altRate=int(AltAz.alt * STEPS_PER_DEGREE - scope.GetALT());
-                azRate=int(AltAz.az * STEPS_PER_DEGREE - scope.GetAZ());
+                
+                altRate=long(TRACK_SCALE*(AltAz.alt * STEPS_PER_DEGREE - scope.GetALT()));
+                azRate=long(TRACK_SCALE*(AltAz.az * STEPS_PER_DEGREE - scope.GetAZ()));
+                
+                if (abs(azRate)>TRACK_SCALE*STEPS_PER_DEGREE*180) {
+                    // Crossing the meridian. AZ skips from 350+ to 0+
+                    // Correct for wrap-around
+                    azRate+=TRACK_SCALE*STEPS_PER_DEGREE*360;
+                }
                 scope.Track(altRate,azRate);
 
-                DEBUGF(DBG_NSEVO, "TimerHit - Tracking AltitudeOffsetMicrosteps %d AzimuthOffsetMicrosteps %d",
-                        altRate, azRate);
+                DEBUGF(DBG_NSEVO, "TimerHit - Tracking AltRate %d AzRate %d ; Should be (deg/s): Alt: %f Az: %f",
+                        altRate, azRate, AltAz.alt-AAzero.alt, AltAz.az- AAzero.az);
             }
             break;
         }

@@ -40,6 +40,7 @@ private:
     static const long STEPS_PER_REVOLUTION;
     static const double STEPS_PER_DEGREE;
     static const double DEFAULT_SLEW_RATE;
+    static const double TRACK_SCALE;
     static const long MAX_ALT;
     static const long MIN_ALT;
 

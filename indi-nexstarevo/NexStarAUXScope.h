@@ -14,6 +14,7 @@ enum AUXCommands {
     MC_SET_POS_GUIDERATE=0x06,
     MC_SET_NEG_GUIDERATE=0x07,
     MC_LEVEL_START=0x0b,
+    MC_SLEW_DONE=0x13,
     MC_GOTO_SLOW=0x17,
     MC_SEEK_INDEX=0x19,
     MC_MOVE_POS=0x24,
@@ -40,26 +41,9 @@ enum AUXtargets {
 
 class AUXCommand{
 public:
-    AUXCommand(buffer buf){
-        parseBuf(buf);
-    }
-    
-    AUXCommand(AUXCommands c, AUXtargets s, AUXtargets d, buffer dat){
-        cmd=c;
-        src=s;
-        dst=d;
-        data=buffer(dat);
-        len=3+data.size();
-    }
-
-    AUXCommand(AUXCommands c, AUXtargets s, AUXtargets d){
-        cmd=c;
-        src=s;
-        dst=d;
-        data=buffer();
-        len=3+data.size();
-    }
-
+    AUXCommand(buffer buf);
+    AUXCommand(AUXCommands c, AUXtargets s, AUXtargets d, buffer dat);
+    AUXCommand(AUXCommands c, AUXtargets s, AUXtargets d);
     
     void fillBuf(buffer &buf);
     void parseBuf(buffer buf);
@@ -87,6 +71,7 @@ public:
     bool Abort();
     long GetALT();
     long GetAZ();
+    bool slewing();
     bool GoTo(long alt, long az, bool track);
     bool Track(long altRate, long azRate);
     bool TimerTick(double dt);
@@ -100,6 +85,7 @@ private:
     void processMsgs();
     void writeMsgs();
     void querryStatus();
+    bool sendCmd(AUXCommand *c);
     long Alt;
     long Az;
     long AltRate;
@@ -108,6 +94,7 @@ private:
     long targetAz;
     long slewRate;
     bool tracking;
+    bool slewingAlt, slewingAz;
     int sock;
     bool simulator=false;
     std::queue<AUXCommand *> iq, oq;

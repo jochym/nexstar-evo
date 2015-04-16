@@ -26,6 +26,20 @@ ev::timer tickw;
 */
 
 
+//////////////////////////////////////////////////
+/////// Utility functions
+//////////////////////////////////////////////////
+
+void msleep(unsigned ms){
+    usleep(ms*1000);
+}
+
+
+void prnBytes(unsigned char *b,int n){
+    fprintf(stderr,"[");
+    for (int i=0; i<n; i++) fprintf(stderr,"%02x ", b[i]);
+    fprintf(stderr,"]\n");
+}
 
 void dumpMsg(buffer buf){
     fprintf(stderr, "MSG: ");
@@ -34,6 +48,31 @@ void dumpMsg(buffer buf){
     }
     fprintf(stderr, "\n");
 }
+
+////////////////////////////////////////////////
+//////  AUXCommand class
+////////////////////////////////////////////////
+
+AUXCommand::AUXCommand(buffer buf){
+        parseBuf(buf);
+}
+    
+AUXCommand::AUXCommand(AUXCommands c, AUXtargets s, AUXtargets d, buffer dat){
+        cmd=c;
+        src=s;
+        dst=d;
+        data=buffer(dat);
+        len=3+data.size();
+}
+
+AUXCommand::AUXCommand(AUXCommands c, AUXtargets s, AUXtargets d){
+        cmd=c;
+        src=s;
+        dst=d;
+        data=buffer();
+        len=3+data.size();
+}
+
 
 
 void AUXCommand::dumpCmd(){
@@ -90,7 +129,7 @@ long AUXCommand::getPosition(){
             buf[i+1]=data[i];
         }
         fprintf(stderr,"Angle: %f\n",ntohl(*(uint32_t *)buf)/pow(2,24));
-        return ntohl(*(uint32_t *)buf);
+        return (long)ntohl(*(uint32_t *)buf);
     } else {
         return 0;
     }
@@ -157,7 +196,9 @@ bool NexStarAUXScope::initConnection(struct sockaddr_in addr) {
     // Max slew rate (steps per second)
     slewRate=2*pow(2,24)/360;
     tracking=false;
-    // Park position at the north horizon.
+    slewingAlt=false;
+    slewingAz=false;
+    // Park position at the south horizon.
     Alt=targetAlt=Az=targetAz=0;
     
     sock=0;
@@ -175,11 +216,13 @@ bool NexStarAUXScope::initConnection(struct sockaddr_in addr) {
       perror("Connect error");
       return false;
     }
+    /*
     int flags;
     flags = fcntl(sock,F_GETFL,0);
     assert(flags != -1);
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
     fprintf(stderr, "Socket:%d\n", sock);
+    */
     /*
     iow.set <NexStarAUXScope, &NexStarAUXScope::io_cb> (this);
     iow.start(sock, ev::READ);
@@ -222,10 +265,16 @@ long NexStarAUXScope::GetAZ(){
     return Az;
 };
 
+bool NexStarAUXScope::slewing(){
+    return slewingAlt || slewingAz;
+}
+
 bool NexStarAUXScope::GoTo(long alt, long az, bool track){
     targetAlt=alt;
     targetAz=az;
     tracking=track;
+    slewingAlt=slewingAz=true;
+    Track(0,0);
     AUXCommand *altcmd= new AUXCommand(MC_GOTO_FAST,APP,ALT);
     AUXCommand *azmcmd= new AUXCommand(MC_GOTO_FAST,APP,AZM);
     altcmd->setPosition(alt);
@@ -237,23 +286,61 @@ bool NexStarAUXScope::GoTo(long alt, long az, bool track){
     for (int i=0; i<3; i++) fprintf(stderr,"%02x ", azmcmd->data[i]);
     fprintf(stderr,"\n");
     */
-    oq.push(altcmd);
-    oq.push(azmcmd);
+    sendCmd(altcmd);
+    sendCmd(azmcmd);
+    readMsgs();
     return true;
 };
 
 bool NexStarAUXScope::Track(long altRate, long azRate){
+    // The scope rates are per minute?
     AltRate=altRate;
     AzRate=azRate;
+    if (slewingAlt || slewingAz) {
+        AltRate=0;
+        AzRate=0;
+    }
     tracking=true;
+    fprintf(stderr,"Set tracking rates: ALT: %d   AZM: %d\n", AltRate, AzRate);
+    AUXCommand *altcmd= new AUXCommand((altRate<0)? MC_SET_NEG_GUIDERATE : MC_SET_POS_GUIDERATE,APP,ALT);
+    AUXCommand *azmcmd= new AUXCommand((azRate<0)? MC_SET_NEG_GUIDERATE : MC_SET_POS_GUIDERATE,APP,AZM);
+    altcmd->setPosition(abs(AltRate));
+    azmcmd->setPosition(abs(AzRate));
+    
+    sendCmd(altcmd);
+    sendCmd(azmcmd);
+    readMsgs();
     return true;
 };
 
 void NexStarAUXScope::querryStatus(){
     AUXtargets trg[2]={ALT,AZM};
+    AUXCommand *cmd;
     for (int i=0; i<2; i++){
-        iq.push(new AUXCommand(MC_GET_POSITION,APP,trg[i]));
+        cmd=new AUXCommand(MC_GET_POSITION,APP,trg[i]);
+        if (not sendCmd(cmd)) {
+            fprintf(stderr,"Send failed!\n");
+        }
+        delete cmd;
     }
+    if (slewingAlt) {
+        cmd=new AUXCommand(MC_SLEW_DONE,APP,ALT);
+        if (not sendCmd(cmd)) {
+            fprintf(stderr,"Send failed!\n");
+        }
+        // Wait with the next command;
+        delete cmd;
+    }
+    if (slewingAz) {
+        cmd=new AUXCommand(MC_SLEW_DONE,APP,AZM);
+        if (not sendCmd(cmd)) {
+            fprintf(stderr,"Send failed!\n");
+        }
+        // Wait with the next command;
+        delete cmd;
+    }
+    
+    
 }
 
 void NexStarAUXScope::processMsgs(){
@@ -272,6 +359,17 @@ void NexStarAUXScope::processMsgs(){
                     default: break;
                 }
                 break;
+            case MC_SLEW_DONE:
+                switch (m->src) {
+                    case ALT:
+                        slewingAlt=m->data[0]!=0xff;
+                        break;
+                    case AZM:
+                        slewingAz=m->data[0]!=0xff;
+                        break;
+                    default: break;
+                }
+                break;
             default :
                 break;
         }
@@ -280,42 +378,67 @@ void NexStarAUXScope::processMsgs(){
     }
 }
 
-void prnBytes(unsigned char *b,int n){
-    fprintf(stderr,"[");
-    for (int i=0; i<n; i++) fprintf(stderr,"%02x ", b[i]);
-    fprintf(stderr,"]\n");
-}
 
 void NexStarAUXScope::readMsgs(){
-    int n;
+    int n, i;
     unsigned char buf[BUFFER_SIZE];
 
     if (sock<3) return;
     
-    while((n = recv(sock, buf, sizeof(buf),0)) > 0) {
+    timeval tv;
+    tv.tv_sec=0;
+    tv.tv_usec=50000;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(struct timeval));
+    while((n = recv(sock, buf, sizeof(buf),MSG_DONTWAIT|MSG_PEEK)) > 0) {
+        /*
         fprintf(stderr,"Got %d bytes: ", n);
-        for (int i=0; i<n; i++) fprintf(stderr,"%02x ", buf[i]);
+        for (i=0; i<n; i++) fprintf(stderr,"%02x ", buf[i]);
         fprintf(stderr,"\n");
-        for (int i=0; i<n; ){
-            fprintf(stderr,"%d ",i);
+        */
+        for (i=0; i<n; ){
+            //fprintf(stderr,"%d ",i);
             if (buf[i]==0x3b) {
                 int shft;
-                shft=std::min(n,i+buf[i+1]+3);
-                prnBytes(buf+i,shft-i);
+                shft=i+buf[i+1]+3;
                 if (shft<=n) {
+                    prnBytes(buf+i,shft-i);
                     buffer b(buf+i, buf+shft);
                     //dumpMsg(b);
                     iq.push(new AUXCommand(b));
                 } else {
-                    fprintf(stderr,"Partial message recv. Dropped!\n");
+                    fprintf(stderr,"Partial message recv. Keep for later!\n");
+                    break;
                 }
                 i=shft;
             } else {
                 i++;
             }
         }
+        // Actually consume data we parsed. Leave the rest for later.
+        
+        n=recv(sock, buf, i,MSG_DONTWAIT);
+        fprintf(stderr,"Consumed %d/%d bytes\n", n, i);
     }
     //fprintf(stderr,"Nothing more to read\n");
+}
+
+int sendBuffer(int sock, buffer buf, long tout_msec){
+    timeval tv;
+    int n;
+    tv.tv_usec=(tout_msec%1000)*1000;
+    tv.tv_sec=tout_msec/1000;
+    setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(struct timeval));
+    n=send(sock, buf.data(), buf.size(), 0);
+    msleep(50);
+    return n;
+}
+
+bool NexStarAUXScope::sendCmd(AUXCommand *c){
+    buffer buf;
+    fprintf(stderr,"Send: ");
+    c->dumpCmd();
+    c->fillBuf(buf);
+    return sendBuffer(sock, buf, 500)==buf.size();
 }
 
 void NexStarAUXScope::writeMsgs(){
@@ -326,7 +449,7 @@ void NexStarAUXScope::writeMsgs(){
         m->dumpCmd();
         m->fillBuf(buf);
         send(sock, buf.data(), buf.size(), 0);
-        sleep(50);
+        msleep(50);
         oq.pop();
         delete m;
     }
@@ -352,10 +475,11 @@ bool NexStarAUXScope::TimerTick(double dt){
     long da;
     int dir;
     
-    //querryStatus();
-    writeMsgs();
+    querryStatus();
+    //writeMsgs();
     readMsgs();
     processMsgs();
+    
     
     if (simulator) {
         // update both axis
