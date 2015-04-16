@@ -36,6 +36,12 @@ void dumpMsg(buffer buf){
 }
 
 
+void AUXCommand::dumpCmd(){
+    fprintf(stderr,"(%02x) %02x -> %02x: ", cmd, src, dst);
+    for (int i=0; i<data.size(); i++) fprintf(stderr,"%02x ", data[i]);
+    fprintf(stderr,"\n");
+}
+
 
 void AUXCommand::fillBuf(buffer &buf){
     buf.resize(len+3);
@@ -44,11 +50,11 @@ void AUXCommand::fillBuf(buffer &buf){
     buf[2]=(unsigned char)src;
     buf[3]=(unsigned char)dst;
     buf[4]=(unsigned char)cmd;
-    for (int i=5; i<len; i++){
-        buf[i]=buf[i-5];
+    for (int i=0; i<data.size(); i++){
+        buf[i+5]=data[i];
     }
     buf.back()=checksum(buf);
-    dumpMsg(buf);
+    //dumpMsg(buf);
 }
 
 void AUXCommand::parseBuf(buffer buf){
@@ -93,7 +99,7 @@ long AUXCommand::getPosition(){
 void AUXCommand::setPosition(long p){
     uint32_t n=htonl(p);
     unsigned char *b=(unsigned char *)&n;
-    fprintf(stderr,"%x -> %x %x %x %x\n", p, b[0], b[1], b[2], b[3]);
+    //fprintf(stderr,"%x -> %x %x %x %x\n", p, b[0], b[1], b[2], b[3]);
     data.resize(3);
     for (int i=0; i<3; i++) data[i]=b[i+1];
     //data.assign(b+1,b+3);
@@ -224,14 +230,15 @@ bool NexStarAUXScope::GoTo(long alt, long az, bool track){
     AUXCommand *azmcmd= new AUXCommand(MC_GOTO_FAST,APP,AZM);
     altcmd->setPosition(alt);
     azmcmd->setPosition(az);
+    /*
     fprintf(stderr,"ALT: ");
     for (int i=0; i<3; i++) fprintf(stderr,"%02x ", altcmd->data[i]);
     fprintf(stderr," AZM: ");
     for (int i=0; i<3; i++) fprintf(stderr,"%02x ", azmcmd->data[i]);
     fprintf(stderr,"\n");
-
-    oq.push(*altcmd);
-    oq.push(*azmcmd);
+    */
+    oq.push(altcmd);
+    oq.push(azmcmd);
     return true;
 };
 
@@ -242,45 +249,25 @@ bool NexStarAUXScope::Track(long altRate, long azRate){
     return true;
 };
 
-void NexStarAUXScope::readMsgs(){
-    int n;
-    unsigned char buf[BUFFER_SIZE];
-
-    if (sock<3) return;
-    
-    while((n = recv(sock, buf, sizeof(buf),0)) > 0) {
-        //fprintf(stderr,"Got %d bytes.", n);
-        for (int i=0; i<n; ){
-            if (buf[i]==0x3b) {
-                int shft;
-                shft=std::min(n,i+buf[i+1]+3);
-                if (shft<=n) {
-                    buffer b(buf+i, buf+shft);
-                    //dumpMsg(b);
-                    iq.push(AUXCommand(b));
-                    i+=shft;
-                } else {
-                    fprintf(stderr,"Partial message recv. Dropped!\n");
-                    i+=shft;
-                }
-            } else {
-                i++;
-            }
-        }
+void NexStarAUXScope::querryStatus(){
+    AUXtargets trg[2]={ALT,AZM};
+    for (int i=0; i<2; i++){
+        iq.push(new AUXCommand(MC_GET_POSITION,APP,trg[i]));
     }
-    //fprintf(stderr,"Nothing more to read\n");
+}
+
+void NexStarAUXScope::processMsgs(){
     while (not iq.empty()) {
-        AUXCommand m=iq.front();
-        //fprintf(stderr,"(%02x) %02x -> %02x\n", m.cmd, m.src, m.dst);
-        switch (m.cmd) {
+        AUXCommand *m=iq.front();
+        m->dumpCmd();
+        switch (m->cmd) {
             case MC_GET_POSITION:
-                fprintf(stderr,"MC_GET_POSITION %02x -> %02x\n",m.src,m.dst);
-                switch (m.src) {
+                switch (m->src) {
                     case ALT:
-                        Alt=m.getPosition();
+                        Alt=m->getPosition();
                         break;
                     case AZM:
-                        Az=m.getPosition();
+                        Az=m->getPosition();
                         break;
                     default: break;
                 }
@@ -289,19 +276,59 @@ void NexStarAUXScope::readMsgs(){
                 break;
         }
         iq.pop();
+        delete m;
     }
+}
+
+void prnBytes(unsigned char *b,int n){
+    fprintf(stderr,"[");
+    for (int i=0; i<n; i++) fprintf(stderr,"%02x ", b[i]);
+    fprintf(stderr,"]\n");
+}
+
+void NexStarAUXScope::readMsgs(){
+    int n;
+    unsigned char buf[BUFFER_SIZE];
+
+    if (sock<3) return;
+    
+    while((n = recv(sock, buf, sizeof(buf),0)) > 0) {
+        fprintf(stderr,"Got %d bytes: ", n);
+        for (int i=0; i<n; i++) fprintf(stderr,"%02x ", buf[i]);
+        fprintf(stderr,"\n");
+        for (int i=0; i<n; ){
+            fprintf(stderr,"%d ",i);
+            if (buf[i]==0x3b) {
+                int shft;
+                shft=std::min(n,i+buf[i+1]+3);
+                prnBytes(buf+i,shft-i);
+                if (shft<=n) {
+                    buffer b(buf+i, buf+shft);
+                    //dumpMsg(b);
+                    iq.push(new AUXCommand(b));
+                } else {
+                    fprintf(stderr,"Partial message recv. Dropped!\n");
+                }
+                i=shft;
+            } else {
+                i++;
+            }
+        }
+    }
+    //fprintf(stderr,"Nothing more to read\n");
 }
 
 void NexStarAUXScope::writeMsgs(){
     buffer buf;
     while (not oq.empty()) {
-        AUXCommand m=oq.front();
-        fprintf(stderr,"Sending: (%02x) %02x -> %02x\n", m.cmd, m.src, m.dst);
-        for (int i=0; i<m.data.size(); i++) fprintf(stderr,"%02x ", m.data[i]);
-        fprintf(stderr,"\n");
-        m.fillBuf(buf);
+        AUXCommand *m=oq.front();
+        fprintf(stderr,"SEND: ");
+        m->dumpCmd();
+        m->fillBuf(buf);
         send(sock, buf.data(), buf.size(), 0);
+        sleep(50);
         oq.pop();
+        delete m;
     }
     return;
     /*
@@ -325,8 +352,10 @@ bool NexStarAUXScope::TimerTick(double dt){
     long da;
     int dir;
     
-    readMsgs();
+    //querryStatus();
     writeMsgs();
+    readMsgs();
+    processMsgs();
     
     if (simulator) {
         // update both axis

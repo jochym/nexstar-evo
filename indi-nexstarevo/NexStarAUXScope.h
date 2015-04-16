@@ -66,6 +66,7 @@ public:
     long getPosition();
     void setPosition(long p);
     unsigned char checksum(buffer buf);
+    void dumpCmd();
     
     AUXCommands cmd;
     AUXtargets src, dst;
@@ -96,7 +97,9 @@ private:
     void io_cb (ev::io &w, int revents);
     void tick_cb (ev::timer &w, int revents);
     void readMsgs();
+    void processMsgs();
     void writeMsgs();
+    void querryStatus();
     long Alt;
     long Az;
     long AltRate;
@@ -107,7 +110,7 @@ private:
     bool tracking;
     int sock;
     bool simulator=false;
-    std::queue<AUXCommand> iq, oq;
+    std::queue<AUXCommand *> iq, oq;
 };
 
 
