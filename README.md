@@ -15,7 +15,7 @@ The code will land in nsevo directory. The analysis contains some communication 
 *Use at your own risk. Never leave the scope unattended when under control of the driver!*
 *I am not responsible for any damage to your equipment due to the use of this software.*
 
-The indi-nexstarevo directory contains a [INDI](http://www.indilib.org/) driver for the telescope 
+The indi-nexstarevo directory contains an [INDI](http://www.indilib.org/) driver for the telescope 
 using AUX command set and wireless communication. 
 It should work for NexStar Evolution and other telescopes using AUX command set
 through PC/AUX ports or SkyQlink wifi adapters. This is **not** a driver for standard
@@ -44,7 +44,10 @@ The most important positions on the TODO list:
 * maybe switch to asynchronous communication with the scope
 
 The code is developed against current trunk of libindi. 
-If you do not know how to compile it it is probably not for you yet.
+If you do not know how to compile it - it is probably not for you yet.
+If you want to be an alpha tester/developer for the code - I will gladly help 
+you to set it up. But if you just want to use it - trust me - it is too early.
+
 I will make packages for debian/ubuntu as soon as soft is in beta-shape.
 And I hope for it to be included in the third-party drivers package for indi.
 
