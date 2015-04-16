@@ -130,6 +130,8 @@ The targets list is extended by some new IDs:
 
 ## Firmware update under linux
 
+**Never connect anything to your scope when it is charging! The charger is not properly grounded and the scope has 80-100V voltage on the chassis. It is enough to fry your ports and the electronics in the scope! Disconnect the charger before connecting anything.**
+
 You can use the CFM Celestron Firmware Manager in linux with openjdk if you change the settings for your serial port.
 Execute following commands for your serial port device (`/dev/ttyUSB0` in this case) before running CFM:
 
