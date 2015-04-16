@@ -128,4 +128,12 @@ The targets list is extended by some new IDs:
   that this mount does not have autoguide port the firmware breaks
   if you try to program it.
 
+## Firmware update under linux
 
+You can use the CFM Celestron Firmware Manager in linux with openjdk if you change the settings for your serial port.
+Execute following commands for your serial port device (`/dev/ttyUSB0` in this case) before running CFM:
+
+        stty -F /dev/ttyUSB0 -icrnl
+        stty -F /dev/ttyUSB0 -ocrnl
+
+I have checked the procedure myself. No problems with update.
