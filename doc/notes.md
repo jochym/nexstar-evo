@@ -36,6 +36,11 @@ The simple setup guide are easy to find on the web for example at
 I think we can conclude that this is simply RN-171, perheps with a slightly
 modified firmware - it shows `<2.40-CEL>` as a version number instead of standard `<X.XX>` described in the manual. Thus I would **not** upgrade the firmware in the module (current firmware level is 4.41 on the microchip site).
 
+Unfortunately I was unable to make it work in access point mode. No tweaking of config 
+could make it work. Even celestron tools for the SkyQLink did not make it connect.
+I would like to at least make the scope network protected instead of open. 
+Any ideas?
+
 The fact that this is just a wifi-to-serial module makes a whole thing easier 
 to figure out. The whole thing probably just translates the data send from the 
 network to the serial stream of the AUX connector. Thus we need to figure out 
