@@ -10,6 +10,14 @@ The code will land in nsevo directory. The analysis contains some communication 
 
 ## The INDIlib driver for Celestron NexStar Evolution
 
+**WOW! The alpha driver has been included in the development version of the
+[INDI](http://www.indilib.org/) project.**
+
+Thus the development of the indi driver has been moved to the sourceforge repo.
+I will figure out some way to mirror it here but for now for the new versions 
+of the driver go to the [INDI code repository](http://sourceforge.net/p/indi/code/).
+Specifically to the [3rd party drivers](http://sourceforge.net/p/indi/code/HEAD/tree/trunk/3rdparty/indi-nexstarevo/).
+
 **This is alpha-quality software!**
 
 *Use at your own risk. Never leave the scope unattended when under control of the driver!*
