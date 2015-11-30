@@ -11,7 +11,7 @@ and the dhcp server in the scope handles out addresses in the /24 network
 starting from 1.2.3.10, with default gateway and dns set to scope (!). This is
 really *bad design*. The address range is a regular *internet* address (belongs
 to google AFAIK). They should use one of the private unroutable networks
-(10.x.x.x or others - RTFM engineers at Celestron). This makes it impossible to
+(10.x.x.x or others - RTFM engineers at Celestron!). This makes it impossible to
 have a "dual home" machine talking to the scope without some manual
 configuration of the routing table - easy but would be unnecessary if the
 default config would be sensible and easily editable.
@@ -40,6 +40,19 @@ Unfortunately I was unable to make it work in access point mode. No tweaking of 
 could make it work. Even celestron tools for the SkyQLink did not make it connect.
 I would like to at least make the scope network protected instead of open. 
 Any ideas?
+
+**Update:** Progress on the AP mode front! You can program the params of the FiFly module from the tablet app when the scope is **disconnected** from the app but the tablet is, obviously, connected to the SkyQlink wifi network. The procedure is as follows - it is non-intuitive but actually easier/simpler then it seems:
+
+1. Switch the stand-alone (standard) mode on the scope
+2. Switch on the scope
+3. Connect to the SkyQLink network
+4. Lounch the app *without* connecting to the scope
+5. Go to settings and fill in the details of your AP
+6. Change mode in the App
+7. Switch the scope off
+8. Switch the scope to AP mode
+9. Switch the scope on and wait for it to connect (the falshing changes)
+10. Reconnect the tablet to your network and reconnect the App to the scope.
 
 The fact that this is just a wifi-to-serial module makes a whole thing easier 
 to figure out. The whole thing probably just translates the data send from the 
