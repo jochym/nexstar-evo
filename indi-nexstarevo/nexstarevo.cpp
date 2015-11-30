@@ -18,46 +18,30 @@ using namespace INDI::AlignmentSubsystem;
 #define POLLMS 1000 // Default timer tick
 
 // We declare an auto pointer to NexStarEvo.
-std::auto_ptr<NexStarEvo> telescope_nse(0);
-
-void ISInit()
-{
-   static int isInit = 0;
-
-   if (isInit == 1)
-       return;
-
-    isInit = 1;
-    if(telescope_nse.get() == 0) telescope_nse.reset(new NexStarEvo());
-}
+std::unique_ptr<NexStarEvo> telescope_nse(new NexStarEvo());
 
 void ISGetProperties(const char *dev)
 {
-        ISInit();
         telescope_nse->ISGetProperties(dev);
 }
 
 void ISNewSwitch(const char *dev, const char *name, ISState *states, char *names[], int num)
 {
-        ISInit();
         telescope_nse->ISNewSwitch(dev, name, states, names, num);
 }
 
 void ISNewText(const char *dev, const char *name, char *texts[], char *names[], int num)
 {
-        ISInit();
         telescope_nse->ISNewText(dev, name, texts, names, num);
 }
 
 void ISNewNumber(const char *dev, const char *name, double values[], char *names[], int num)
 {
-        ISInit();
         telescope_nse->ISNewNumber(dev, name, values, names, num);
 }
 
 void ISNewBLOB (const char *dev, const char *name, int sizes[], int blobsizes[], char *blobs[], char *formats[], char *names[], int n)
 {
-    ISInit();
     telescope_nse->ISNewBLOB (dev, name, sizes, blobsizes, blobs, formats, names, n);
 }
 
@@ -86,16 +70,9 @@ NexStarEvo::NexStarEvo() :
     TraceThisTickCount(0),
     TraceThisTick(false),
     DBG_NSEVO(INDI::Logger::getInstance().addDebugLevel("NexStar Evo Verbose", "NSEVO")) 
-{
-    TelescopeCapability cap;
-
-    cap.canPark = false;
-    cap.canSync = true;
-    cap.canAbort = true;
-    cap.nSlewRate=6;
-    SetTelescopeCapability(&cap);
+{   
+    SetTelescopeCapability(TELESCOPE_CAN_PARK | TELESCOPE_CAN_SYNC | TELESCOPE_CAN_ABORT, 6);
 }
-
 
 // Private methods
 
@@ -151,7 +128,7 @@ bool NexStarEvo::Disconnect()
 
 const char * NexStarEvo::getDefaultName()
 {
-    return (char *)"NexStar Evolution";
+    return (char *)"NexStar Evo";
 }
 
 bool NexStarEvo::Goto(double ra,double dec)
@@ -276,7 +253,7 @@ bool NexStarEvo::initProperties()
     addDebugControl();
 
     // Add alignment properties
-    InitProperties(this);
+    InitAlignmentProperties(this);
 
     return true;
 }
@@ -286,7 +263,7 @@ bool NexStarEvo::ISNewBLOB (const char *dev, const char *name, int sizes[], int 
     if(strcmp(dev,getDeviceName())==0)
     {
         // Process alignment properties
-        ProcessBlobProperties(this, name, sizes, blobsizes, blobs, formats, names, n);
+        ProcessAlignmentBLOBProperties(this, name, sizes, blobsizes, blobs, formats, names, n);
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewBLOB(dev, name, sizes, blobsizes, blobs, formats, names, n);
@@ -299,7 +276,7 @@ bool NexStarEvo::ISNewNumber (const char *dev, const char *name, double values[]
     if(strcmp(dev,getDeviceName())==0)
     {
         // Process alignment properties
-        ProcessNumberProperties(this, name, values, names, n);
+        ProcessAlignmentNumberProperties(this, name, values, names, n);
 
     }
 
@@ -313,7 +290,7 @@ bool NexStarEvo::ISNewSwitch (const char *dev, const char *name, ISState *states
     if(strcmp(dev,getDeviceName())==0)
     {
         // Process alignment properties
-        ProcessSwitchProperties(this, name, states, names, n);
+        ProcessAlignmentSwitchProperties(this, name, states, names, n);
     }
 
     //  Nobody has claimed this, so, ignore it
@@ -325,7 +302,7 @@ bool NexStarEvo::ISNewText (const char *dev, const char *name, char *texts[], ch
     if(strcmp(dev,getDeviceName())==0)
     {
         // Process alignment properties
-        ProcessTextProperties(this, name, texts, names, n);
+        ProcessAlignmentTextProperties(this, name, texts, names, n);
     }
     // Pass it up the chain
     return INDI::Telescope::ISNewText(dev, name, texts, names, n);
