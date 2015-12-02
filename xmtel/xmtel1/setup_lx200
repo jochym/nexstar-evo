@@ -1,0 +1,5 @@
+rm protocol.c
+rm protocol.h
+ln -s ../lx200/protocol.c protocol.c
+ln -s ../lx200/protocol.h protocol.h
+cp Makefile.lx200 Makefile

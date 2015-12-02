@@ -1,0 +1,105 @@
+It is recommended that you use the "hc" driver if you are planning on using the
+telescope with a computer attached, and will be at the telescope when you turn
+on the driver power.  If not, read on.
+
+Celestron mountings typically have three electronic interfaces labeled:
+
+PC  -- A true RS232 port that connects directly to the motor controllers.
+HC  -- A RS232 connector on the hand controller.
+AUX -- A TTL serial connector that is otherwise identical to the PC connection.
+
+There are two different control languages -- one uses the power of the hand
+control computer and celestial coordinates (hc command set), the other is a
+hardware language that is unaware of the sky (aux command set). The aux command
+set may be accessed through the HC, PC or AUX ports.  The hc command set may be
+accessed only through the HC port. 
+
+It is simpler than it sounds.  
+
+The PC port on our Celestron mounts is very sensitive to electrical 
+interference and is unreliable.  In short, the advice is not to use it. 
+
+The AUX port is a TTL interface.  Without additional components it cannot be
+used as an interface for the mount.
+
+Therefore, always connect your computer to the telescope through the serial port
+on the hand control, the "HC" port.  
+
+For the most reliable operation --
+
+Use the HC driver. Initialize the pointing as if you were going 
+to observe "hands-on."  Run the telescope from your computer.
+
+If you need to start the telescope remotely and run without an operator from
+power-on to power-off --
+
+Use the AUX driver. For a German Equatorial, have the OTA over the pier
+pointing at the pole when you apply power to the mount. Do not initialize the
+hand control, but simply turn on the power and then run from your comptuer.
+
+The subdirectories have files for the three different modes of operation of a
+Celestron telescope with NexStar motor controllers. Use the "setup_nexstar_hc"
+and "setup_nexstar_aux" scripts when compiling.  You will only need to edit in
+the aux directory if there are gearing ratio changes for your mount that have to
+be set.
+
+
+hc 
+==
+
+The serial port of the computer is connected to the hand control (HC) as
+described in the NexStar telescope manuals for interfacing the telescope to a
+computer.  The telescope must go through the manual startup process and 
+requires hands-on intervention to operate in the usual way after power is 
+turned on.   Once started, however, it will run remotely on this interface, 
+and RA and Dec  positioning will be available manually through the hand paddle.
+
+
+aux 
+===  
+
+The serial port of the computer is connected to the hand control (HC) as
+described in the NexStar telescope manuals for interfacing the telescope to a
+computer. The telescope does not go through a manual startup process, and  its
+position is set by direct commands to the motor drives.  The internal software
+in the hand paddle for positioning is bypassed in this mode.  Use this if you
+want to turn on the telescope remotely without an operator present and rarely 
+use the hand control at the telescope.
+
+In its present state of development, the aux driver header must be modified by
+the end user to match the their own telescope gearing.  With the parameters
+given here, the driver works for our large German equatorials which were
+prototypes for the current (2010) CGE "Pro".  
+
+We expect to provide appropriate parameters for the NexStar fork mounts and the
+CGE Pro but you may have to set these in the header files before compiling.
+
+
+pc 
+==
+
+The serial port of the computer is connected to a PC port on the telescope. 
+This interface provides a direct connection to the two motor control boards and
+does not use the features of the hand controller.  It is primitive, and
+lacks the user safeguards of the hand control.  
+
+This inteface does not work on most mounts due to electronic issues with the 
+RS232 circuitry. If the mounting does not respond to the hand control when the
+computer is connected to the PC port, that may the case with your mounting. The
+simplest solution is to use the aux system described above and the HC  wiriing
+interface. There are some third-party buffers for the PC port that could fix 
+this but we do not have access to one.
+
+At this time the software for this interface is incomplete because of a hardware
+issue with the mountings on which we test xmtel. We have left the undeveloped
+code here because it has the communications components that would be needed for
+a successful version. The code is not updated for the current version of xmtel
+and would require work to get it functional.
+
+ 
+ 
+
+     
+
+
+ 

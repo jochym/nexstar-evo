@@ -1,0 +1,121 @@
+PC controller interfacing notes 
+===============================
+
+
+ RS232 at 19200 bits per second, no parity 1 stop bit and RTS/CTS control
+ 
+ The packet format is
+ 
+ <preamble=0x3b>
+ <packet len>
+ <source device #>
+ <destination device #>
+ <message ID>
+ <message data bytes>
+ <checksum byte>
+ 
+ 
+ A sample packet to query the firmware version  
+ 
+ <0x3b> preamble
+ <0x03> packet length after source device ID is 3 message bytes
+ <0x0d> source ID used for an external connection
+ <0x10> destination device motor controller
+ <0xfe> request firmware version
+ <0xeb> checksum
+ 
+ A sample packet to change the C20 focus is
+ 
+ <0x3b> preamble
+ <0x04> packet length
+ <0x0d> source ID for external connection  
+ <0x12> destination to focusser controller as device 18 (0x12)
+ <0x24> command to move motor in positive direction at rate specified by data
+ <0x05> motor rate (0 to 9, 0 to stop)
+ <csum>
+ 
+ 
+  
+ The bytes are
+ 
+ <destId> = destination for packet: 
+   0x01 main board
+   0x03 dummy source number 
+   0x10 azm controller
+   0x11 alt controller
+
+ <msgId> = message 
+   0x01 = get position with 24 bit response
+     <data1> degrees
+     <data2> minutes
+     <data3> seconds
+   0x02 = goto fast, accepts 24 bit signed data, rate = 9, acknowledges
+   0x04 = set position accepts 24 bit signed data as above, acknowledges
+   0x06 = set positive guide rate, accepts rate as 24 bit data or 16 bit data
+     0xffff sidereal
+     0xfffe solar
+     0xfffd lunar
+   0x07 = set negative guide rate as above
+   0x0b = start leveling process in GPS systems, acknowledges
+   0x0c = start recording PEC data and acknowledge
+   0x0d = start or stop PEC playback, accepts 8 bit data, acknowledges 
+     0x00 stop playback
+     0x01 start playback
+   0x10 = set positive backlash, accepts 8 bit data in range 0 to 99
+   0x11 = set negative backlash
+   0x12 = level done, returns 8 bits
+     0x00 not done
+     0xff done
+   0x13 = slew done, returns 8 bits 
+     0x00 not done
+     0xff done
+   0x15 = PEC record done, returns 8 bits
+     0x00 not done
+     0xff done
+   0x16 = PEC record stop no data and no acknowledgement
+   0x17 = goto slow, accepts 24 bit signed data, acknowledges
+   0x18 = query if motor is at index, used by PEC, 8 bit response
+     0x00 not at index
+     0xff at index 
+   0x19 = seek index, no data or acknowledgement  
+   0x24 = move positive, 8 bit data rate rate 0 to 9
+   0x25 = move negative, 8 bit data rate rate 0 to 9
+   0xfc = get approach, returns 8 bit data 
+     0x00 positive
+     0x01 negative
+   0xfd = set approach, accepts 8 bit data as above, returns acknowledgement
+
+
+
+ <data#> = message data set to zero if not used
+
+ <responseBytes> = number of bytes to echo as a response
+   Recommended handling is to wait for a response but ignore the echo 
+
+
+
+ The command format for a connection through the PC interface is    
+ 
+   where
+
+   0x50 is a code requesting that the data pass through to the motors     
+   msgLen is how many bytes including msgId  and valid data bytes     
+   destId is the AUX command set destination number                    
+   msgId  is the AUX command set message number                        
+   data1-3 are up to 3 bytes of message data                           
+   responseBytes is the number of bytes to echo back in response       
+
+ For example, the command to get data from the focus motor is          
+
+   focusCmd[] = { 0x50, 0x01, 0x12, 0x01, 0x00, 0x00, 0x00, 0x03 }     
+
+ These pass-through commands are used in                               
+
+   GetFocus   (CDK20 only) 
+   Focus      (CDK20 only) 
+   StartTrack 
+   StopTrack  
+   StartSlew  
+   StopSlew   
+
+

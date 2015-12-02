@@ -1,0 +1,8 @@
+On 64-bit systems the gtk and glib include files that are needed are in lib64.
+This is only an issue with the rcos driver, and for that one use
+
+make -f Makefile_lib64.rcos
+
+to select a makefile that should work.
+
+

@@ -1,0 +1,33 @@
+August 11, 2010
+===============
+
+The files in this directory have been used to test the PC port on the C11-GPS,
+C11-CGE, and our (unique) C20.  The PC port uses the auxilliary command set, and
+requires a checksum.  It accepts RS232 and converts it to the internal TTL
+serial communication that connects the motor controllers and the hand
+controller.  An advantage of this hardware interface over the serial interface
+through the hand controller is that it is independent of the hand control
+microcomputer.  It can monitor the communication between the hand control and
+the motor control.
+
+However, on our C20 telescopes, this interface is not electronically reliable. 
+Any cable connected to the interface generates miscommunication between the HC
+and the motor controllers.  This is not the case for the C11-GPS, but because we
+have not been able to use this connection effectively with our own hardware, it
+is not currently maintained.
+
+The code here is a partially written implementation of the AUX command set for
+the PC interface.  It is >>NOT<< ready for use.  The intialization routine
+offers an example of how to talk and listen to the controllers through the PC
+port.  It has been used successfully on a C11-GPS and may therefore be useful
+for others. 
+
+The same functionality is available through  the hand controller's serial port
+(the RJ-11 jack on the HC unit).  Use the files in the nexstar/aux directory for
+this purpose. The interface through the hand controller is electronically
+robust, is debugged and functional, while this driver is not.
+
+Also please see WARNING for a notice about the maintenance of the code in this
+section.
+
+

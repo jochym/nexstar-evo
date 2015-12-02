@@ -1,0 +1,8 @@
+rm protocol.c
+rm protocol.h
+ln -s ../bisque/mks/protocol.c protocol.c
+ln -s ../bisque/mks/protocol.h protocol.h
+ln -s ../bisque/mks/mks3.o mks3.o
+ln -s ../bisque/mks/mks3.h mks3.h
+
+cp Makefile.mks Makefile

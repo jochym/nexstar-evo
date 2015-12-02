@@ -1,0 +1,5 @@
+rm protocol.c
+rm protocol.h
+ln -s ../nexstar/hc/protocol.c protocol.c
+ln -s ../nexstar/hc/protocol.h protocol.h
+cp Makefile.nexstar Makefile

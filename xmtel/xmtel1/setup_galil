@@ -1,0 +1,6 @@
+rm protocol.c
+rm protocol.h
+rm *.o
+ln -s ../galil/protocol.c protocol.c
+ln -s ../galil/protocol.h protocol.h
+cp Makefile.galil Makefile

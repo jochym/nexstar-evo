@@ -1,0 +1,5 @@
+rm protocol.c
+rm protocol.h
+ln -s ../planewave/sitech/protocol.c protocol.c
+ln -s ../planewave/sitech/protocol.h protocol.h
+cp Makefile.sitech Makefile

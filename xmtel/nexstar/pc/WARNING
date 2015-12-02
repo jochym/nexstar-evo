@@ -1,0 +1,13 @@
+This code is included only for reference and it will not work with the current
+version of xmtel.  See nexstar/aux for the up-to-date structure.
+
+The difference between the PC and AUX verions is in the communication with the
+microcontrollers in the mount. The AUX version uses the serial buffers of the
+hand control, and the PC version goes directly  to the mirocontroller serial
+network.  
+
+Unfortunately many Celestron mounts with a "PC" connection are very sensitive to
+pickup on the serial lines, and do not function reliably when any connection is
+made to the PC port.  The hand control's serial input buffers the serial lines
+from the computer and insures noise immunity.
+

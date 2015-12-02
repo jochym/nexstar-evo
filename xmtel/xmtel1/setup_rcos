@@ -1,0 +1,11 @@
+echo
+echo "The RC Optical Systems driver code is proprietary and is available on request."
+echo "The driver for this version of XmTel is currently under development."
+echo
+exit
+
+rm protocol.c
+rm protocol.h
+ln -s ../rcos/protocol.c protocol.c
+ln -s ../rcos/protocol.h protocol.h
+cp Makefile.rcos Makefile

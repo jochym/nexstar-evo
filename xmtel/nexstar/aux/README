@@ -1,0 +1,37 @@
+October 20, 2010
+================
+
+Defined quantities in protocol.h must match your telescope.  Look
+for
+
+#define ALTCOUNTPERDEG 46603.3778      
+#define AZCOUNTPERDEG  46603.3778
+
+and modify as needed.  Values for the C11 CGE the C11 GPS fork mounts may
+be provided in subsequent release.
+
+The files in this directory support the use of the auxilliary command set of 
+the NexStar system, accessed through the RJ-11 serial port on the hand paddle.
+
+These commands do not rely on the software in the handcontroller for
+calculation of RA and Dec.  When this driver is in use you will be able to use
+the hand control NSEW buttons, but you will not have access to RA and Dec from
+the hand control display.
+
+WARNING:  Some of the software protections for limits and cordwrap available
+through the handcontrol interface after a normal manual startup will not be
+functional when this driver is in use.  You must provide other means of
+protecting your hardware from unintentional mechanical damage when you use this
+driver.  This is particularly crucial for remote or unattended operation.
+
+Our recommendation is that this driver only be used in combination with
+limit switches which turn off power to the telescope if it should track or slew
+into an unwanted configuration, or at a minimum, with visual confirmation that
+it is performing normally, and easy access to a "kill" switch.
+
+Please see the manual for additional information and for suggestions on how to
+add limit switches to a mounting.
+
+
+
+

@@ -1,0 +1,45 @@
+Be very (!!) careful when you use this driver.
+
+It is designed to give the remote user full control of the telescope. This
+means it is the end-user's responsibility to insure that the telescope does 
+not move into a configuration that may damage it, or damage accessories
+attached to it.
+
+A German equatorial is particularly susceptable to collision with the pier, or
+with "hard stops" on the mounting.  This driver does take these limits into
+account, and attempts to keep the telescope away from the pier.  However, it
+is possible that something could go wrong, and the NexStar control system
+does NOT provide for full safety.
+
+If you are using this system to control an unattended telescope, I strongly
+recommend that you add mechanical switches in series with the DC supply on
+the motor drive.  These switches would be normally closed, but should
+instantly open if
+
+(1) OTA points below the horizon
+(2) The HA motion exceeds the mounting's physical limits
+(3) The Dec motion endangers attached accessories such as the camera
+
+The OTA switch could be a level switch. These are typically simple
+ball-in-tube devices that trip a microswitch if the ball is at the bottom of
+the tube. Mercury switches are also ideal, but not environmentally sound.
+
+The HA limit switches should be mechanical (not software) microswitches that
+trip when the mounting approaches its HA slew limits.  On a fork mount this
+may not be necessary.  On a German equatorial it is essential to protect
+against accidental collision of the OTA with the pier.
+
+The Dec limit switch is necessary on a fork mount if attached cameras or
+accessories cannot clear the inside of the fork.  Some protection is
+provided by the OTA level switch, but this is not complete.
+
+Recovery from a limit switch trip should require manual intervention. In a
+remote system with visual confirmation of the telescope's orientation, this
+may be met by a power override on the telescope CPU, followed by manual
+control of the telescope slew to clear the limit situation.
+
+Suggestions and examples of how to achieve this inexpensively will be
+provided in the manual and on-line documentation eventually.  In the
+meantime, regard this driver as experimental, and use it with the
+understanding that there are risks.
+

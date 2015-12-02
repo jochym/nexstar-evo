@@ -11,19 +11,14 @@
 #include <queue>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <ev++.h>
 
-#include "indicom.h"
+#include <indicom.h>
 #include "NexStarAUXScope.h"
 
 #define BUFFER_SIZE 10240
 #define DEFAULT_ADDRESS "1.2.3.4"
 #define DEFAULT_PORT 2000
 int MAX_CMD_LEN=32;
-/*
-ev::io iow;
-ev::timer tickw;
-*/
 
 
 //////////////////////////////////////////////////
@@ -254,6 +249,13 @@ void NexStarAUXScope::tick_cb (ev::timer &w, int revents) {
 
 
 bool NexStarAUXScope::Abort(){
+    Track(0,0);
+    buffer b(1);
+    b[0]=0;
+    AUXCommand stopAlt(MC_MOVE_POS,APP,ALT,b);
+    AUXCommand stopAz(MC_MOVE_POS,APP,AZM,b);
+    sendCmd(&stopAlt);
+    sendCmd(&stopAz);
     return true;
 };
 
@@ -262,6 +264,7 @@ long NexStarAUXScope::GetALT(){
 };
 
 long NexStarAUXScope::GetAZ(){
+    if (Az<0) Az+=STEPS_PER_REVOLUTION;
     return Az;
 };
 
