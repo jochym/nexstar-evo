@@ -136,7 +136,7 @@ The targets list is extended by some new IDs:
         3b 03 20 10 47 86
         3b 04 10 20 f0 47 95
         3b 03 20 11 47 85
-        3b 04 11 20 f0 47 94
+        3b 04 11 20 f0 47 94       
 
   One would think this should be 0x47f0 not 0xf047 ?
   Maybe it is just a bug in the firmware and it is a autoguide rate 
@@ -146,7 +146,21 @@ The targets list is extended by some new IDs:
   that this mount does not have autoguide port the firmware breaks
   if you try to program it.
 
-## Firmware update under linux
+* 0x26 = MTR_AUX_GUIDE (Pulse guiding using AUX communication)
+        Command is followed by a signed char: velocity [% sidereal]; and
+        unsigned char: duration [10 ms units].
+
+* 0x27 = MTR_IS_AUX_GUIDE_ACTIVE 
+        MC returns TRUE(1) if last AUX_GUIDE command/s is still in effect.
+        MC returns FALSE(0) if last AUX_GUIDE command has expired.
+
+* 0x46, 0x47 = set/get the autoguide rates as a percentage of sidereal
+        (Described in the main AUX commands document)
+        MC_SET_AUTOGUIDE_RATE = 0x46, // 8    n/a     Set percentage of sidereal
+        MC_GET_AUTOGUIDE_RATE = 0x47, // 8    n/a     % = 100, * val/256
+
+
+## Firmware update under Linux
 
 **Never connect anything to your scope when it is charging! The charger is not properly grounded and the scope has 80-100V voltage on the chassis. It is enough to fry your ports and the electronics in the scope! Disconnect the charger before connecting anything.**
 
