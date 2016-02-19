@@ -62,3 +62,6 @@ target/
 # Notebook checkpoints
 notebook/.ipynb_checkpoints/
 .ipynb_checkpoints/
+
+notebook/nexstarevo.py
+
