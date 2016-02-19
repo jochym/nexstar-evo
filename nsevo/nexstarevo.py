@@ -38,6 +38,7 @@ commands={
           'MC_GET_POSITION':0x01,
           'MC_GOTO_FAST':0x02,
           'MC_SET_POSITION':0x04,
+          'MC_GET_???':0x05,
           'MC_SET_POS_GUIDERATE':0x06,
           'MC_SET_NEG_GUIDERATE':0x07,
           'MC_LEVEL_START':0x0b,
@@ -45,6 +46,7 @@ commands={
           'MC_SEEK_INDEX':0x19,
           'MC_MOVE_POS':0x24,
           'MC_MOVE_NEG':0x25,
+          'MC_GET_APPROACH':0xfc,
           'GET_VER':0xfe,
          }
 
@@ -264,6 +266,7 @@ class NSEScope(asynchat.async_chat):
 
 # Message classes
 class nse_msg:
+
     
     def __init__(self, l, s, d, i, data=None):
         self.l=l
@@ -287,14 +290,33 @@ class nse_msg:
         return r+' '.join(['0x%02x' % ord(c) for c in self.data])
 
 class nse_mc_msg(nse_msg):
+
+#          'MC_GET_POSITION':0x01,
+#          'MC_GOTO_FAST':0x02,
+#          'MC_SET_POSITION':0x04,
+#          'MC_GET_???':0x05,
+#          'MC_SET_POS_GUIDERATE':0x06,
+#          'MC_SET_NEG_GUIDERATE':0x07,
+#          'MC_LEVEL_START':0x0b,
+#          'MC_GOTO_SLOW':0x17,
+#          'MC_SEEK_INDEX':0x19,
+#          'MC_MOVE_POS':0x24,
+#          'MC_MOVE_NEG':0x25,
+#          'MC_GET_APPROACH':0xfc,
+#          'GET_VER':0xfe,
+ 
+    PosCmd=[0x01,0x02,0x04,0x06,0x07]
     
     
     def __init__(self, l, s, d, i, data=None):
         nse_msg.__init__(self, l, s, d, i, data)
     
     def __repr__(self):
-        r=self._repr_head()
-        return (r+parse_pos(self.data)).encode('utf-8')
+        if self.mid in nse_mc_msg.PosCmd :
+            r=self._repr_head()
+            return (r+parse_pos(self.data)).encode('utf-8')
+        else :
+            return nse_msg.__repr__(self)
 
 class nse_pos_msg(nse_mc_msg):
 

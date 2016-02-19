@@ -4,7 +4,7 @@ MOTIFL = /usr/X11R6/lib
 CC = gcc
 CFLAGS = $(LIBINC) $(CLDFLAGS) -O2 -Wall -I$(MOTIFI) 
 LDFLAGS = $(LIBLNK) $(CLDFLAGS) -L$(MOTIFL) 
-XLIBS = -lXm -lXp -lXt -lXext -lSM -lICE -lXmu -lX11
+XLIBS = -lXm -lXt -lXext -lSM -lICE -lXmu -lX11
 LIBS = $(XLIBS) -lm -lxpa
 
 
