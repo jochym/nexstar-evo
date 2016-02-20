@@ -124,7 +124,7 @@ The targets list is extended by some new IDs:
 |   0x23    |           |     N/A       |    8bit       |           |
 |   0xf0    |           |     N/A       |    8bit       |           |
 
-* 0x05 - Gets some angle data from the AZM MC. No transmission from the ALT MC spotted.
+* 0x05 - Gets some angle data from the ALT/AZM MC. It is executed by the HC at the start.
 * 0x20 - Sends 16 bits to ALT and AZM. Only AZM acknowledges.
 * 0x21 - Asks AZM. Gets 32 bits back. Always the same so far (0x0f901194). Used at the start of the session.
 * 0x22 - Sends one byte (0x01) to ALT and AZM.
