@@ -92,6 +92,8 @@ where `msg` contains all bytes from `len` to the last data byte. This is just la
 The targets list is extended by some new IDs:
 
 * 0x0d - The NexStar+ controller
+* 0xb4 - ???
+* 0xb4 - ???
 * 0xb5 - WiFly WiFi controller. 
   - Responds to  0x10 - get status. Probably to enable/disable commands as well (cannot test these!).
 * 0xb6 - Battery/Power controller
@@ -159,6 +161,27 @@ The targets list is extended by some new IDs:
         MC_SET_AUTOGUIDE_RATE = 0x46, // 8    n/a     Set percentage of sidereal
         MC_GET_AUTOGUIDE_RATE = 0x47, // 8    n/a     % = 100, * val/256
 
+
+## Lights commands
+
+* 0x10 = SET_LEVEL, NUM, VAL 
+    Tx: Number, Value - Two bytes, 0 - Tray, 1 - Logo, 2 - WiFi ; Val 0-255
+    Rx: Ack
+
+## Charging Port (BAT target)
+
+* 0x18 = SET_CURRENT, VAL (to BAT target)
+    Tx: Value - 16bit int - current in mA
+    Rx: Repeat actual value in the same format
+
+
+
+## Possible errors in the Andre Paquette document
+
+It seems that the angles (ALT/AZM) communicated by the MCs are *unsigned* 24bit
+integers. It is consistent with the way the Celestron Z/z commands work 
+(described in the 'NexStar Communication Protocol' document by Celestron).
+This is different from the info in the Andre's document.
 
 ## Firmware update under Linux
 
