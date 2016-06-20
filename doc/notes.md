@@ -127,11 +127,13 @@ The targets list is extended by some new IDs:
 |   0xf0    |           |     N/A       |    8bit       |           |
 
 * 0x05 - Gets some angle data from the ALT/AZM MC. It is executed by the HC at the start.
-* 0x20 - Sends 16 bits to ALT and AZM. Only AZM acknowledges.
-* 0x21 - Asks AZM. Gets 32 bits back. Always the same so far (0x0f901194). Used at the start of the session.
-* 0x22 - Sends one byte (0x01) to ALT and AZM.
-* 0x23 - Asks AZM. Gets back one byte (0x01 so far). 
-  0x21 and 0x23 are used together at the start of the session. Both against AZM MC.
+  
+* The 0x20 - 0x23 commands activate speed limit for MC in the conversation with App.
+* 0x20, VALUE - set max slew rate. 16bit int 1e-3 deg/s (?)
+* 0x21, Get max slew rates as two 16bit ints. Corresponds to ALT, AZM max rates in 1e-3 deg/s (?) 
+* 0x22, VALUE - enable max slew rate, one byte, 0x01 = Active, 0x00 = Inactive
+* 0x23, returns status of the max rate setting (enabled=0x01, disabled=0x00)
+  
 * 0xf0 - Sends one byte (0x47) from ALT and AZM in reply to cmd 0x47.
   Seems to be problematic - the messages are:
 
@@ -164,17 +166,26 @@ The targets list is extended by some new IDs:
 
 ## Lights commands
 
-* 0x10 = SET_LEVEL, NUM, VAL 
+* 0x10 = GET/SET_LEVEL, NUM, VAL 
     Tx: Number, Value - Two bytes, 0 - Tray, 1 - Logo, 2 - WiFi ; Val 0-255
-    Rx: Ack
+    Rx: ACK or one byte of level if the command was send with just NUM
 
 ## Charging Port (BAT target)
+
+
+* 0x10 = GET_VOLTAGE
+    Tx: None
+    Rx: two 24bit ints(?). Second is (?) voltage in uV (microvolts) the first 
+       may be the general level of the bat (low/medium/high) (?)
 
 * 0x18 = SET_CURRENT, VAL (to BAT target)
     Tx: Value - 16bit int - current in mA
     Rx: Repeat actual value in the same format
 
+## Charging controller
 
+* 0x10 = SET_MODE
+    Tx: 1 byte - 0x00 = Auto, 0x01 = On
 
 ## Possible errors in the Andre Paquette document
 
