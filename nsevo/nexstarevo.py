@@ -1,4 +1,4 @@
-#!env python
+#!env python3
 # -*- coding: utf-8 -*-
 # NexStar Evolution communication library
 # (L) by Paweł T. Jochym <jochym@gmail.com>
@@ -6,27 +6,32 @@
 
 from __future__ import division
 
+import asyncio
+import signal
 import socket
 import sys
+from socket import SOL_SOCKET, SO_BROADCAST, SO_REUSEADDR
 import struct
 import time
 import asynchat
-
 
 # ID tables
 targets={'ANY':0x00,
          'MB' :0x01,
          'HC' :0x04,
+         'UKN1':0x05,
          'HC+':0x0d,
          'AZM':0x10,
          'ALT':0x11,
          'APP':0x20,
          'GPS':0xb0,
+         'UKN2': 0xb4,
          'WiFi':0xb5,
          'BAT':0xb6,
          'CHG':0xb7,
          'LIGHT':0xbf
         }
+trg_names={value:key for key, value in targets.items()}
         
 control={
          'HC' :0x04,
@@ -42,13 +47,63 @@ commands={
           'MC_SET_POS_GUIDERATE':0x06,
           'MC_SET_NEG_GUIDERATE':0x07,
           'MC_LEVEL_START':0x0b,
+          'MC_SET_POS_BACKLASH':0x10,
+          'MC_SET_NEG_BACKLASH':0x11,
+          'MC_SLEW_DONE':0x13,
           'MC_GOTO_SLOW':0x17,
+          'MC_AT_INDEX':0x18,
           'MC_SEEK_INDEX':0x19,
+          'MC_SET_MAXRATE':0x20,
+          'MC_GET_MAXRATE':0x21,
+          'MC_ENABLE_MAXRATE':0x22,
+          'MC_MAXRATE_ENABLED':0x23,
           'MC_MOVE_POS':0x24,
           'MC_MOVE_NEG':0x25,
+          'MC_ENABLE_CORDWRAP':0x38,
+          'MC_DISABLE_CORDWRAP':0x39,
+          'MC_SET_CORDWRAP_POS':0x3a,
+          'MC_POLL_CORDWRAP':0x3b,
+          'MC_GET_CORDWRAP_POS':0x3c,
+          'MC_GET_POS_BACKLASH':0x40,
+          'MC_GET_NEG_BACKLASH':0x41,
+          'MC_GET_AUTOGUIDE_RATE':0x47,
           'MC_GET_APPROACH':0xfc,
+          'MC_SET_APPROACH':0xfd,
           'GET_VER':0xfe,
          }
+cmd_names={value:key for key, value in commands.items()}
+
+ACK_CMDS=[0x02,0x04,0x06,0x24,]
+
+MC_ALT=0x10
+MC_AZM=0x11
+
+trg_cmds = {
+    'BAT': {
+        0x10:'GET_VOLTAGE',
+        0x18:'GET_SET_CURRENT',
+    },
+    'CHG': {
+        0x10: 'GET_SET_MODE',
+    },
+    'LIGHT': {
+        0x10:'GET_SET_LEVEL',
+    },
+}
+
+RATES = {
+    0 : 0.0,
+    1 : 1/(360*60),
+    2 : 2/(360*60),
+    3 : 5/(360*60),
+    4 : 15/(360*60),
+    5 : 30/(360*60),
+    6 : 1/360,
+    7 : 2/360,
+    8 : 5/360,
+    9 : 10/360
+}
+
 
 trgid={}
 for k in targets.keys():
@@ -61,6 +116,39 @@ for k in control.keys():
 cmdid={}
 for k in commands.keys():
     cmdid[commands[k]]=k
+
+def print_command(cmd):
+    if cmd[2] in (0x10, 0x20):
+        try :
+            return 'Command: %s->%s [%s] len:%d: data:%r' % (
+                        trg_names[cmd[1]], 
+                        trg_names[cmd[2]], 
+                        cmd_names[cmd[3]], cmd[0], cmd[4:-1])
+        except KeyError :
+            pass
+    try :
+        return 'Command: %s->%s [%02x] len:%d: data:%r' % (
+                    trg_names[cmd[1]], 
+                    trg_names[cmd[2]], 
+                    cmd[3], cmd[0], cmd[4:-1])
+    except KeyError :
+        pass
+        
+    return 'Command: %02x->%02x [%02x] len:%d: data:%r' % (
+                cmd[1], cmd[2], cmd[3], cmd[0], cmd[4:-1])
+            
+
+def decode_command(cmd):
+    return (cmd[3], cmd[1], cmd[2], cmd[0], cmd[4:-1], cmd[-1])
+
+def split_cmds(data):
+    # split the data to commands
+    # the initial byte b'\03b' is removed from commands
+    return [cmd for cmd in data.split(b';') if len(cmd)]
+
+def make_checksum(data):
+    return ((~sum([c for c in bytes(data)]) + 1) ) & 0xFF
+
 
 # Utility functions
 def checksum(msg):
@@ -79,9 +167,9 @@ def f2dms(f):
 def dprint(m):
     for c in m:
         if ord(c)==0x3b :
-            print
-        print "0x%02x" %ord(c),
-    print
+            print()
+        print("0x%02x" %ord(c),end='')
+    print()
 
 def split_msgs(r,debug=False):
     '''
@@ -95,7 +183,7 @@ def split_msgs(r,debug=False):
         #if debug : print l, p
         ml.append(r[l:p]+r[p])
         l=p+1
-    if debug : print ml
+    if debug : print(ml)
     return ml
 
 def parse_msg(m, debug=False):
@@ -106,10 +194,10 @@ def parse_msg(m, debug=False):
     l=ord(m[0])+1
     msg=m[:l]
     if debug :
-        print 'Parse:',
+        print('Parse:',end='')
         dprint(msg)
     if  chr(checksum(msg)) != m[l] :
-        print 'Checksum error: %x vs. %02x' % (checksum(msg) , ord(m[l]))
+        print('Checksum error: %x vs. %02x' % (checksum(msg) , ord(m[l])))
         dprint(m)
     l,src,dst,mid=struct.unpack('4B',msg[:4])
     dat=msg[4:l+1]
@@ -155,7 +243,7 @@ class NSEScope(asynchat.async_chat):
 
         try:
             data = self.recv (self.ac_in_buffer_size)
-        except socket.error, why:
+        except socket.error() as why:
             if why.args[0] in _BLOCKING_IO_ERRORS:
                 return
             self.handle_error()
@@ -226,7 +314,7 @@ class NSEScope(asynchat.async_chat):
         l,s,d,mid,dat=parse_msg(msg)
         trg=s if d in ctrlid else d
         if  d!=self.me:
-            print 'A',
+            print('A',end='')
         try :
             return MsgType[trg](l,s,d,mid,dat)
         except KeyError :
@@ -241,11 +329,11 @@ class NSEScope(asynchat.async_chat):
             self.set_terminator('\x3b')
             self.startup=False
             self.ibuffer=[]
-            print 'Hello!'
+            print('Hello!')
             sys.stdout.flush()
             return
         if self.reading_headers :
-            print 'msg:',
+            print('msg:',end='')
             self.reading_headers=False
             self.ibuffer=[]
             self.set_terminator(1)
@@ -255,7 +343,7 @@ class NSEScope(asynchat.async_chat):
             self.set_terminator('\x3b')
             self.msg=''.join(self.ibuffer)
             #dprint(self.msg)
-            print self.handle_msg(self.msg)
+            print(self.handle_msg(self.msg))
         else :
             self.handling=True
             self.msglen=ord(self.ibuffer[0][0])
@@ -329,4 +417,25 @@ MsgType={
         0x11: nse_mc_msg,
         }
 
+class look_for_scope:
+    def connection_made(self, transport):
+        self.transport = transport
+        print('Connected')
+
+    def datagram_received(self, data, addr):
+        #message = data.decode('ASCII')
+        if addr[1]==2000 and len(data)==110:
+            print('Got signature from the scope at: %s' % (addr[0],))
+
+
+loop = asyncio.get_event_loop()
+listen = loop.create_datagram_endpoint(look_for_scope, local_addr=('0.0.0.0', 55555))
+transport, protocol = loop.run_until_complete(listen)
+try :
+    loop.run_forever()
+except KeyboardInterrupt :
+    pass
+transport.close()
+loop.close()
+print('Controller shuting down')
 
