@@ -4,7 +4,7 @@
 # (L) by Paweł T. Jochym <jochym@gmail.com>
 # This code is under GPL 3.0 license
 
-from __future__ import division
+from __future__ import division, print_function
 
 import asyncio
 import signal
@@ -13,7 +13,7 @@ import sys
 from socket import SOL_SOCKET, SO_BROADCAST, SO_REUSEADDR
 import struct
 import time
-import asynchat
+
 
 # ID tables
 targets={'ANY':0x00,
@@ -91,6 +91,10 @@ trg_cmds = {
     },
 }
 
+for trg in list(trg_cmds.keys()):
+    for i in list(trg_cmds[trg].keys()):
+        trg_cmds[trg][trg_cmds[trg][i]]=i
+
 RATES = {
     0 : 0.0,
     1 : 1/(360*60),
@@ -144,15 +148,14 @@ def decode_command(cmd):
 def split_cmds(data):
     # split the data to commands
     # the initial byte b'\03b' is removed from commands
-    return [cmd for cmd in data.split(b';') if len(cmd)]
-
-def make_checksum(data):
-    return ((~sum([c for c in bytes(data)]) + 1) ) & 0xFF
-
+    if data.find(b';') == -1 :
+        return []
+    else :
+        return [cmd for cmd in data.split(b';') if cmd]
 
 # Utility functions
 def checksum(msg):
-    return ((~sum([ord(c) for c in msg]) + 1) ) & 0xFF
+    return ((~sum([c for c in bytes(msg)]) + 1) ) & 0xFF
 
 def f2dms(f):
     '''
@@ -165,44 +168,45 @@ def f2dms(f):
     return dd,mm,ss
 
 def dprint(m):
+    m=bytes(m)
     for c in m:
-        if ord(c)==0x3b :
+        if c==0x3b :
             print()
-        print("0x%02x" %ord(c),end='')
+        print("%02x" % c, end=':')
     print()
 
 def split_msgs(r,debug=False):
     '''
     Split the buffer into separate messages of the AUX protocol.
     '''
-    l=r.find('\x3b')+1
+    l=r.find(b'\x3b')+1
     p=l
     ml=[]
     while p>-1:
-        p=r.find('\x3b',l)
+        p=r.find(b'\x3b',l)
         #if debug : print l, p
-        ml.append(r[l:p]+r[p])
+        ml.append(r[l:p]+bytes(r[p]))
         l=p+1
     if debug : print(ml)
-    return ml
+    return ml, p
 
 def parse_msg(m, debug=False):
     '''
     Parse bytes byond 0x3b. 
     Do not pass the message with preamble!
     '''
-    l=ord(m[0])+1
-    msg=m[:l]
+    m=bytes(m)
+    msg=m[:-1]
     if debug :
         print('Parse:',end='')
         dprint(msg)
-    if  chr(checksum(msg)) != m[l] :
-        print('Checksum error: %x vs. %02x' % (checksum(msg) , ord(m[l])))
+    if  checksum(msg) != m[-1] :
+        print('Checksum error: %x vs. %02x' % (checksum(msg) , m[-1]))
         dprint(m)
     l,src,dst,mid=struct.unpack('4B',msg[:4])
-    dat=msg[4:l+1]
+    dat=msg[4:-1]
     #print 'len:', l
-    return l, src, dst, mid, dat
+    return src, dst, mid, dat
 
 
 
@@ -216,22 +220,214 @@ def parse_pos(d):
     else :
         return u''
 
+def detect_scope(verbose=False):
+    '''
+    NexStar Evolution detector. This function listens for the
+    telescope (SkyFi dongle really) signature on the 55555 udp
+    port send from the port 2000 and containing 110 bytes of payload.
+    This could be easily adapted for different ports/signatures.
+    
+    Returns: scope_ip:string, scope_port:int
+    '''
+    class DetectScope:
+        def __init__(self, loop, verbose=False):
+            self.loop = loop
+            self.transport = None
+            self.scope_ip = None
+            self.scope_port = None
+            self.verbose = verbose
+
+        def connection_made(self, transport):
+            self.transport = transport
+            if self.verbose: print('Looking for scope ...')
+
+        def datagram_received(self, data, addr):
+            if addr[1]==2000 and len(data)==110:
+                if self.verbose: print('Got signature from the scope at: %s' % (addr[0],))
+                self.scope_ip, self.scope_port = addr[0], addr[1]
+                self.transport.close()
+
+        def error_received(self, exc):
+            print('Error received:', exc)
+
+        def connection_lost(self, exc):
+            if self.verbose: print("Socket closed")
+            loop = asyncio.get_event_loop()
+            loop.stop()
+    
+    loop = asyncio.get_event_loop()
+    detector=DetectScope(loop,verbose)
+    connect = loop.create_datagram_endpoint(lambda: detector, local_addr=('0.0.0.0', 55555))
+    transport, protocol = loop.run_until_complete(connect)
+    try :
+        loop.run_forever()
+    except KeyboardInterrupt :
+        pass
+    transport.close()
+    
+    return detector.scope_ip, detector.scope_port
 
 # Target classes
 
-class NSEScope(asynchat.async_chat):
+class NSEScope:
+    '''
+    The controller object. This class represents the scope to the client 
+    software. It handles all communications and abstracts the scope to
+    the simple API.
+    '''
+    #TODO: Describe the API
     
-    def __init__(self, addr='1.2.3.4', port=2000):
-        asynchat.async_chat.__init__(self)
-        self.create_socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.connect((addr, port))
-        self.ibuffer = []
-        self.obuffer = ''
+    def __init__(self, addr=None, port=2000, verbose=False):
+        if addr is None:
+            self.ip, self.port = detect_scope(verbose)
+        else :
+            self.ip, self.port = addr, port
+        self.ibuffer = b''
+        self.obuffer = b''
         self.reading_headers = True
         self.handling = False
-        self.set_terminator('*HELLO*')
+        #self.set_terminator('*HELLO*')
         self.startup=True
         self.me=targets['APP']
+        self.verb=verbose
+        self.connected=False
+        self.oq = asyncio.Queue()
+        self.iq = asyncio.Queue()
+        
+    def dbg(self, *args, **kwargs):
+        if self.verb:
+            if 'file' in kwargs:
+                print(*args, **kwargs)
+            else :
+                print(*args, file=sys.stderr, **kwargs)
+
+    async def process_buffer(self, verb):
+        for m in split_cmds(self.ibuffer):
+            await self.iq.put(nse_msg(*parse_msg(m,verb)))
+        self.ibuffer = b''
+
+    async def handle_comm(self, loop):
+        self.dbg('Connecting...',end='')
+        rd, wr = await asyncio.open_connection(self.ip, self.port, loop=loop)
+        self.dbg('OK')
+        self.connected = True
+        wr.write(b'exit\r\n')
+        while self.connected :
+            cmd = await self.oq.get()
+            self.dbg('SND:',cmd)
+            wr.write(cmd.encode())
+            self.ibuffer += await rd.read(128)
+            self.dbg(self.ibuffer.hex(), ' => ', end='')
+            await self.process_buffer(self.verb)
+            self.dbg(self.ibuffer.hex())
+            self.dbg('MQ:',self.iq.qsize())
+        self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Finished connection')
+
+    async def ctrl(self):
+
+        self.dbg('Asking ... ')
+        for trg in 'ALT', 'AZM' :
+            await self.queue_cmd(dst=trg, cmd='GET_VER')
+        await self.queue_cmd('AZM', 'MC_GET_???')
+        for trg in 'ALT', 'AZM' :
+            await self.queue_cmd(dst=trg, cmd='MC_MOVE_POS', data=b'\x00')
+            await self.queue_cmd(dst=trg, cmd='MC_GET_APPROACH')
+            await self.queue_cmd(dst=trg, cmd='MC_GET_POS_BACKLASH')
+            await self.queue_cmd(dst=trg, cmd='MC_GET_MAXRATE')
+            await self.queue_cmd(dst=trg, cmd='MC_MAXRATE_ENABLED')
+            await self.queue_cmd(dst=trg, cmd='MC_GET_AUTOGUIDE_RATE')
+            await self.queue_cmd(dst=trg, cmd='MC_SET_POS_GUIDERATE', data=b'\x00\x00\x00')
+
+        await self.queue_cmd(dst='LIGHT', cmd='GET_SET_LEVEL', data=b'\x02')
+        await self.queue_cmd(dst='LIGHT', cmd='GET_SET_LEVEL', data=b'\x00')
+        await self.queue_cmd(dst='CHG', cmd='GET_SET_MODE')
+        await self.queue_cmd(dst='BAT', cmd='GET_SET_CURRENT')
+        await self.queue_cmd(dst='BAT', cmd='GET_VOLTAGE')
+        await self.queue_cmd(dst='AZM', cmd='MC_ENABLE_CORDWRAP')
+        await self.queue_cmd(dst='AZM', cmd='MC_SET_CORDWRAP_POS', data=b'\x7f\xff\xff')
+        
+        self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Init finished')
+
+    async def consume(self):
+        self.dbg('Waiting for answers')
+        while True:
+            cmd = await self.iq.get()
+            print('RCV:', cmd)
+            if not self.connected : break
+        self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Finished consumer')
+
+    async def move(self):
+        await asyncio.sleep(15)
+        self.dbg('Moving ... ')
+        for trg in 'ALT', 'AZM' :
+            await self.queue_cmd(dst=trg, cmd='MC_GOTO_FAST', data=b'\x0F\x00')
+        await asyncio.sleep(15)
+        self.dbg('Moving back ... ')
+        for trg in 'ALT', 'AZM' :
+            await self.queue_cmd(dst=trg, cmd='MC_GOTO_FAST', data=b'\x00\x00')
+        await asyncio.sleep(15)
+        self.dbg('Finito')
+        self.connected = False
+        await self.queue_cmd(dst='ALT', cmd='GET_VER')
+        self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Finished move')
+    
+    async def get_status(self):
+        while not self.connected:
+            await asyncio.sleep(10)
+            print('.', end='')
+        self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Finished pre-connect')
+        while self.connected :
+            await asyncio.sleep(10)
+            await self.queue_cmd(dst='BAT', cmd='GET_VOLTAGE')
+            for trg in 'ALT', 'AZM' :
+                await self.queue_cmd(dst=trg, cmd='MC_GET_POSITION')
+        self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>Finished status')
+                
+
+    async def queue_cmd(self, dst, cmd, src='APP', data=b''):
+        s=targets[src]
+        d=targets[dst]
+        try :
+            i=commands[cmd]
+        except KeyError :
+            i=trg_cmds[dst][cmd]
+        await self.oq.put(nse_msg( s=s, d=d, i=i, data=bytes(data)))
+
+    def connect(self):
+        '''
+        Activate the connection to the scope.
+        '''
+        loop = asyncio.get_event_loop()
+
+        loop.run_until_complete(asyncio.wait({
+            self.handle_comm(loop),
+            self.ctrl(),
+            self.move(),
+            self.consume(),
+            self.get_status()
+        }))
+        loop.stop()
+        loop.close()
+
+    def connection_made(self, transport):
+        self.dbg('Connected.')
+        for src, ver in get_fw_version('ANY'):
+            self.dbg('TRG: {}  FW_VER: {}'.format(trg_names[src], ver))
+#        azm=self.get_fw_version('AZM')
+#        alt=self.get_fw_version('ALT')
+#        hc=self.get_fw_version('HC')
+#        mb=self.get_fw_version('MB')
+
+    def data_received(self, data):
+        '''Buffer the data'''
+        self.ibuffer.append(data)
+        
+        
+    def connection_lost(self, exc):
+        self.dbg('The server closed the connection')
+        self.print('Stop the event loop')
+        self.loop.stop()
+
         
     # grab some more data from the socket,
     # throw it to the collector method,
@@ -239,7 +435,7 @@ class NSEScope(asynchat.async_chat):
     # if found, transition to the next state.
     # Modified from stdlib - we need empty 
     # strings passed to collect data.
-    def handle_read (self):
+    def datagram_received(self, data):
 
         try:
             data = self.recv (self.ac_in_buffer_size)
@@ -320,10 +516,6 @@ class NSEScope(asynchat.async_chat):
         except KeyError :
             return nse_msg(l,s,d,mid,dat)
     
-    def collect_incoming_data(self, data):
-        '''Buffer the data'''
-        self.ibuffer.append(data)
-    
     def found_terminator(self):
         if self.startup :
             self.set_terminator('\x3b')
@@ -354,14 +546,12 @@ class NSEScope(asynchat.async_chat):
 
 # Message classes
 class nse_msg:
-
-    
-    def __init__(self, l, s, d, i, data=None):
-        self.l=l
+    def __init__(self, s, d, i, data=b''):
+        self.l=len(data)+3
         self.src=s
         self.dst=d
         self.mid=i 
-        self.data=data
+        self.data=bytes(data)
     
     def _repr_head(self):
         try :
@@ -375,7 +565,14 @@ class nse_msg:
 
     def __repr__(self):
         r=self._repr_head()
-        return r+' '.join(['0x%02x' % ord(c) for c in self.data])
+        return r+' '.join(['0x%02x' % c for c in self.data])
+        
+    def encode(self):
+        s='3B{:02x}{:02x}{:02x}{:02x}'.format(len(self.data)+3,self.src,self.dst,self.mid)
+        b = bytearray.fromhex(s)+self.data
+        b += bytearray([checksum(b[1:])])
+        print('CMD:', b.hex(),file=sys.stderr)
+        return b
 
 class nse_mc_msg(nse_msg):
 
@@ -417,25 +614,15 @@ MsgType={
         0x11: nse_mc_msg,
         }
 
-class look_for_scope:
-    def connection_made(self, transport):
-        self.transport = transport
-        print('Connected')
-
-    def datagram_received(self, data, addr):
-        #message = data.decode('ASCII')
-        if addr[1]==2000 and len(data)==110:
-            print('Got signature from the scope at: %s' % (addr[0],))
-
-
-loop = asyncio.get_event_loop()
-listen = loop.create_datagram_endpoint(look_for_scope, local_addr=('0.0.0.0', 55555))
-transport, protocol = loop.run_until_complete(listen)
-try :
-    loop.run_forever()
-except KeyboardInterrupt :
-    pass
-transport.close()
-loop.close()
-print('Controller shuting down')
+            
+            
+if __name__ == '__main__':
+    ip, port = detect_scope(verbose=True)
+    if ip is not None :
+        print('Scope detected at {}:{}'.format(ip,port))
+    else :
+        print('Scope not detected')
+    scope = NSEScope(ip,port,True)
+    scope.connect()
+    asyncio.get_event_loop().close()
 
