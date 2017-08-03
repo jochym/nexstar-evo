@@ -14,6 +14,9 @@ from socket import SOL_SOCKET, SO_BROADCAST, SO_REUSEADDR
 import struct
 import time
 
+import skyfield.api
+from skyfield.api import Topos, EarthSatellite
+
 
 # ID tables
 targets={'ANY':0x00,
@@ -170,11 +173,12 @@ def f2dms(f):
     '''
     Convert fraction of the full rotation to DMS triple (degrees).
     '''
-    d=360*f
+    s= 1 if f>0 else -1
+    d=360*abs(f)
     dd=int(d)
     mm=int((d-dd)*60)
     ss=(d-dd-mm/60)*3600
-    return dd,mm,ss
+    return s*dd,mm,ss
 
 def parse_pos(d):
     '''
@@ -311,7 +315,11 @@ class NexStarScope:
         self.guiding=False
         self.alt=0.0
         self.azm=0.0
+        self.trg_alt = 0.0
+        self.trg_azm = 0.0
         self.voltage=0.0
+        self.ISS='INI'
+        self.stations= skyfield.api.load.tle('http://celestrak.com/NORAD/elements/stations.txt', reload=True)
         self.oq = asyncio.Queue()
         self.iq = asyncio.Queue()
         self._mc_handlers = {
@@ -516,6 +524,65 @@ class NexStarScope:
         self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>(move)Finished move')
 
 
+    async def trackISS(self, sleep=0.2):
+
+        self.ISS='LD'
+
+        ts = skyfield.api.load.timescale()
+        place = Topos('50.0833 N', '20.0333 E')
+        iss = self.stations['ISS (ZARYA)'] - place
+        
+        self.ISS='CAL'
+        #t0=ts.utc(2017, 2, 14, 16, 27, 20)
+        t0 = ts.now()
+        p0 = iss.at(t0)
+        alt, azm, dist = p0.altaz()
+        self.ISS='GT1'
+        await self.goto(alt.degrees/360, azm.degrees/360)
+        t0 = ts.now()
+        p0 = iss.at(t0)
+        alt, azm, dist = p0.altaz()
+        self.ISS='GT2'
+        await self.goto(alt.degrees/360, azm.degrees/360)
+        t0 = ts.now()
+        p0 = iss.at(t0)
+        alt, azm, dist = p0.altaz()
+        self.ISS='GT3'
+        await self.goto(alt.degrees/360, azm.degrees/360, False)
+        self.ISS='SLP'
+        await asyncio.sleep(sleep)
+
+        #dt= ts.now().tt - t0.tt
+        dt= 0/24/60/60
+        scale = 3
+        self.ISS='TRK'
+        k=0
+        while self.connected :
+            t = ts.now()
+            t.tt -= dt
+            p_now = iss.at(t)
+            t.tt += (sleep/24/60/60)
+            p_next = iss.at(t)
+            alt, azm, dist = p_next.altaz()
+            s_alt = self.alt
+            if s_alt > 0.5 :
+                s_alt -= 1
+            a = (alt.degrees/360 - s_alt)
+            if abs(a) > 0.5 :
+                if a>0 : a-=1 
+                else : a+=1
+            self.alt_gr = scale*a/sleep
+            a = (azm.degrees/360 - self.azm)
+            if abs(a) > 0.5 :
+                if a>0 : a-=1 
+                else : a+=1
+            self.azm_gr = scale*a/sleep
+            self.ISS='GD%s' % ('|/-\\'[k])
+            await self.guide(self.alt_gr, self.azm_gr)
+            k+=1 ; k%=4
+            await asyncio.sleep(sleep)
+
+
     async def get_status(self, sleep=1):
         while not self.connected:
             await asyncio.sleep(1)
@@ -541,10 +608,15 @@ class NexStarScope:
     async def show_status(self, sleep=1):
         
         while self.connected :
-            print('Batt.: {:.2f}V  Az: {}({})  Alt: {} ({})'.format(
+            alt=self.alt
+            if alt > 0.5 :
+                alt-=1
+            print('{:3s} Batt.: {:.2f}V  Az: {}({})  Alt: {} ({})   TRG: {} {}'.format(
+                self.ISS,
                 self.voltage,
                 repr_angle(self.azm), 'S' if self.slew_azm else 'G' if self.guiding else 'I',
-                repr_angle(self.alt), 'S' if self.slew_alt else 'G' if self.guiding else 'I',
+                repr_angle(alt), 'S' if self.slew_alt else 'G' if self.guiding else 'I',
+                repr_angle(self.trg_azm), repr_angle(self.trg_alt),
             ), end='\r')
             sys.stdout.flush()
             await asyncio.sleep(sleep)
@@ -573,7 +645,7 @@ class NexStarScope:
             self.handle_write(wr),
             self.get_status(),
             self.show_status(),
-            self.move(),
+            self.trackISS(),
         }))
         loop.stop()
 
@@ -594,6 +666,7 @@ class NexStarScope:
         cmd='MC_GOTO_FAST' if fast else 'MC_GOTO_SLOW'
         self.slew_alt=True
         self.slew_azm=True
+        self.trg_alt, self.trg_azm = alt, azm
         await self.queue_cmd(dst='ALT', cmd=cmd, data=pack_int3(alt))
         await self.queue_cmd(dst='AZM', cmd=cmd, data=pack_int3(azm))
         if wait :
@@ -696,7 +769,7 @@ if __name__ == '__main__':
         print('Scope detected at {}:{}'.format(ip,port))
     else :
         print('Scope not detected')
-    scope = NexStarScope(ip,port,True)
+    scope = NexStarScope(ip,port,False)
     scope.connect()
     asyncio.get_event_loop().close()
 
