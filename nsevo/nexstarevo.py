@@ -15,7 +15,7 @@ import struct
 import time
 
 import skyfield.api
-from skyfield.api import Topos, EarthSatellite
+from skyfield.api import Topos
 
 
 # ID tables
@@ -524,46 +524,51 @@ class NexStarScope:
         self.dbg('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>(move)Finished move')
 
 
-    async def trackISS(self, sleep=0.2):
+    async def trackISS(self, sleep=2):
+        #TODO: Need to implement proper PID control loop.
+        #      As it is now it oscillates when error gets too big.
 
         self.ISS='LD'
 
         ts = skyfield.api.load.timescale()
-        place = Topos('50.0833 N', '20.0333 E')
+        place = Topos('50.0833 N', '20.0333 E', elevation_m=200)
         iss = self.stations['ISS (ZARYA)'] - place
         
         self.ISS='CAL'
-        #t0=ts.utc(2017, 2, 14, 16, 27, 20)
         t0 = ts.now()
-        p0 = iss.at(t0)
-        alt, azm, dist = p0.altaz()
+        dt = 0
+        
+        # Debugging - fix at certain pass - shift time by dt
+        t0 = ts.utc(2017, 8, 6, 18, 50, 30)
+        dt = t0.tt - ts.now().tt
+        print(t0.utc_jpl(), ts.now().utc_jpl(), dt)
+        
+        t0 = ts.tt(jd=ts.now().tt + dt)
+        print(t0.utc_jpl())
+        alt, azm, _ = iss.at(t0).altaz('standard')
         self.ISS='GT1'
         await self.goto(alt.degrees/360, azm.degrees/360)
-        t0 = ts.now()
-        p0 = iss.at(t0)
-        alt, azm, dist = p0.altaz()
+        t0 = ts.tt(jd=ts.now().tt + dt)
+        alt, azm, _ = iss.at(t0).altaz('standard')
         self.ISS='GT2'
         await self.goto(alt.degrees/360, azm.degrees/360)
-        t0 = ts.now()
-        p0 = iss.at(t0)
-        alt, azm, dist = p0.altaz()
+        t0 = ts.tt(jd=ts.now().tt + dt)
+        alt, azm, _ = iss.at(t0).altaz('standard')
         self.ISS='GT3'
         await self.goto(alt.degrees/360, azm.degrees/360, False)
         self.ISS='SLP'
         await asyncio.sleep(sleep)
-
-        #dt= ts.now().tt - t0.tt
-        dt= 0/24/60/60
-        scale = 3
+        
+        scale = 60 # Guiding rate scalling factor
         self.ISS='TRK'
         k=0
         while self.connected :
-            t = ts.now()
-            t.tt -= dt
-            p_now = iss.at(t)
-            t.tt += (sleep/24/60/60)
-            p_next = iss.at(t)
-            alt, azm, dist = p_next.altaz()
+            t = ts.tt(jd=ts.now().tt + dt + sleep/86400)
+            tp = ts.tt(jd=ts.now().tt + dt)
+            pa, pz, _ = iss.at(tp).altaz('standard')
+            alt, azm, _ = iss.at(t).altaz('standard')
+            dalt = pa.degrees/360 - self.alt
+            dazm = pz.degrees/360 - self.azm
             s_alt = self.alt
             if s_alt > 0.5 :
                 s_alt -= 1
@@ -577,7 +582,7 @@ class NexStarScope:
                 if a>0 : a-=1 
                 else : a+=1
             self.azm_gr = scale*a/sleep
-            self.ISS='GD%s' % ('|/-\\'[k])
+            self.ISS="GD%s: (%.1f' %0.1f') " % ('|/-\\'[k], dalt*21600, dazm*21600)
             await self.guide(self.alt_gr, self.azm_gr)
             k+=1 ; k%=4
             await asyncio.sleep(sleep)
