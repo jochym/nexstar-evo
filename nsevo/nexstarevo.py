@@ -570,14 +570,26 @@ class NexStarScope:
             dalt = pa.degrees/360 - self.alt
             dazm = pz.degrees/360 - self.azm
             s_alt = self.alt
+            s_azm = self.azm
             if s_alt > 0.5 :
                 s_alt -= 1
+
+            # Flip AZM - should be optional
+            # Not all hardware can pass 90deg alt
+            if abs(s_alt) > 0.25 :
+                s_azm += 0.5
+                s_azm %= 1
+                if s_alt > 0 :
+                    s_alt = 0.5 - s_alt
+                else :
+                    s_alt = -0.5 - s_alt
+            
             a = (alt.degrees/360 - s_alt)
             if abs(a) > 0.5 :
                 if a>0 : a-=1 
                 else : a+=1
             self.alt_gr = scale*a/sleep
-            a = (azm.degrees/360 - self.azm)
+            a = (azm.degrees/360 - s_azm)
             if abs(a) > 0.5 :
                 if a>0 : a-=1 
                 else : a+=1
