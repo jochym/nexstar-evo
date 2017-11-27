@@ -91,8 +91,9 @@ where `msg` contains all bytes from `len` to the last data byte. This is just la
 
 The targets list is extended by some new IDs:
 
+* 0x0e - The StarSense controller
 * 0x0d - The NexStar+ controller
-* 0xb4 - ???
+* 0xb4 - The StarSense camera.
 * 0xb5 - WiFly WiFi controller. 
   - Responds to  0x10 - get status. Probably to enable/disable commands as well (cannot test these!).
 * 0xb6 - Battery/Power controller
