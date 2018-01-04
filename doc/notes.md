@@ -36,12 +36,7 @@ The simple setup guide are easy to find on the web for example at
 I think we can conclude that this is simply RN-171, perheps with a slightly
 modified firmware - it shows `<2.40-CEL>` as a version number instead of standard `<X.XX>` described in the manual. Thus I would **not** upgrade the firmware in the module (current firmware level is 4.41 on the microchip site).
 
-Unfortunately I was unable to make it work in access point mode. No tweaking of config 
-could make it work. Even celestron tools for the SkyQLink did not make it connect.
-I would like to at least make the scope network protected instead of open. 
-Any ideas?
-
-**Update:** Progress on the AP mode front! You can program the params of the FiFly module from the tablet app when the scope is **disconnected** from the app but the tablet is, obviously, connected to the SkyQlink wifi network. The procedure is as follows - it is non-intuitive but actually easier/simpler then it seems:
+You can program the params of the FiFly module from the tablet app when the scope is **disconnected** from the app but the tablet is, obviously, connected to the SkyQlink wifi network. The procedure is as follows - it is non-intuitive but actually easier/simpler then it seems:
 
 1. Switch the stand-alone (standard) mode on the scope
 2. Switch on the scope
@@ -118,23 +113,15 @@ The targets list is extended by some new IDs:
 
 |   ID      |   Label   |   Tx data     |   Rx data     |   Notes   |
 |:---------:|:----------|:-------------:|:-------------:|-----------|
-|   0x05    |           |     N/A       |   24bit       |           |
-|   0x20    |           |     16bit     |    Ack        |           |
-|   0x21    |           |     N/A       |   32bit       |           |
-|   0x22    |           |     8bit      |    Ack        |           |
-|   0x23    |           |     N/A       |    8bit       |           |
-|   0xf0    |           |     N/A       |    8bit       |           |
+|   0x05    |           |     N/A       |   24bit       |   Gets some angle data from the ALT/AZM MC. It is executed by the HC at the start.         |
+|   0x20    |           |     16bit     |    Ack        |  VALUE - set max slew rate. 16bit int 1e-3 deg/s (?)         |
+|   0x21    |           |     N/A       |   32bit       |  Get max slew rates as two 16bit ints. Corresponds to ALT, AZM max rates in 1e-3 deg/s (?)         |
+|   0x22    |           |     8bit      |    Ack        | VALUE - enable max slew rate, one byte, 0x01 = Active, 0x00 = Inactive          |
+|   0x23    |           |     N/A       |    8bit       |  returns status of the max rate setting (enabled=0x01, disabled=0x00)         |
+|   0xf0    |           |     N/A       |    8bit       |   Sends one byte (0x47) from ALT and AZM in reply to cmd 0x47.        |
 
-* 0x05 - Gets some angle data from the ALT/AZM MC. It is executed by the HC at the start.
   
-* The 0x20 - 0x23 commands activate speed limit for MC in the conversation with App.
-* 0x20, VALUE - set max slew rate. 16bit int 1e-3 deg/s (?)
-* 0x21, Get max slew rates as two 16bit ints. Corresponds to ALT, AZM max rates in 1e-3 deg/s (?) 
-* 0x22, VALUE - enable max slew rate, one byte, 0x01 = Active, 0x00 = Inactive
-* 0x23, returns status of the max rate setting (enabled=0x01, disabled=0x00)
-  
-* 0xf0 - Sends one byte (0x47) from ALT and AZM in reply to cmd 0x47.
-  Seems to be problematic - the messages are:
+* 0xf0 - Seems to be problematic - the messages are:
 
         3b 03 20 10 47 86
         3b 04 10 20 f0 47 95
@@ -148,6 +135,8 @@ The targets list is extended by some new IDs:
   At least in the AltAz mode. It is also possible that due to the fact
   that this mount does not have autoguide port the firmware breaks
   if you try to program it.
+
+## Autoguiding commands
 
 * 0x26 = MTR_AUX_GUIDE (Pulse guiding using AUX communication)
         Command is followed by a signed char: velocity [% sidereal]; and
