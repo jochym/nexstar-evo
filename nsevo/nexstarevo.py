@@ -264,9 +264,9 @@ def detect_scope(verbose=False):
             if self.verbose: print('Looking for scope ...')
 
         def datagram_received(self, data, addr):
-            if addr[1]==2000 and len(data)==110:
+            if (len(data) == 110 or len(data) == 108):
                 if self.verbose: print('Got signature from the scope at: %s' % (addr[0],))
-                self.scope_ip, self.scope_port = addr[0], addr[1]
+                self.scope_ip, self.scope_port = addr[0], 2000
                 self.transport.close()
 
         def error_received(self, exc):
