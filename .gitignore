@@ -66,3 +66,7 @@ notebook/.ipynb_checkpoints/
 notebook/nexstarevo.py
 xmtelremote_static
 xmtel1
+
+
+.vscode
+venv
